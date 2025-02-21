@@ -1,139 +1,189 @@
 jQuery(document).ready(function($) {
-    // Configuration de base
-    const config = {
-        messageTimeout: 3000,
-        animationSpeed: 400
-    };
-
-    // Classe pour gérer les notifications
-    class NotificationManager {
-        constructor(parent) {
-            this.parent = parent;
-        }
-
-        show(message, type) {
-            const messageElement = $('<span>', {
-                class: `woo-pennylane-${type}`,
-                text: message
-            });
-
-            this.parent.after(messageElement);
-
-            setTimeout(() => {
-                messageElement.fadeOut(config.animationSpeed, function() {
-                    $(this).remove();
-                });
-            }, config.messageTimeout);
-        }
-    }
-
-    // Gestion du bouton de resynchronisation
-    $('.woo-pennylane-resync').on('click', function(e) {
-        e.preventDefault();
-        
-        const button = $(this);
-        const orderId = button.data('order-id');
-        const nonce = button.data('nonce');
-        const notificationManager = new NotificationManager(button);
-        
-        // Désactive le bouton et ajoute un spinner
-        button.prop('disabled', true);
-        const spinner = $('<span>', {
-            class: 'woo-pennylane-spinner spinner is-active'
-        });
-        button.after(spinner);
-
-        // Appel AJAX pour la resynchronisation
-        $.ajax({
-            url: ajaxurl,
-            type: 'POST',
-            data: {
-                action: 'woo_pennylane_resync_order',
-                order_id: orderId,
-                nonce: nonce
-            },
-            success: function(response) {
-                spinner.remove();
-                notificationManager.show(
-                    response.message,
-                    response.success ? 'success' : 'error'
-                );
-                button.prop('disabled', false);
-            },
-            error: function() {
-                spinner.remove();
-                notificationManager.show(
-                    wooPennylaneParams.errorMessage,
-                    'error'
-                );
-                button.prop('disabled', false);
-            }
-        });
-    });
-
-    // Validation des paramètres
-    $('#woo-pennylane-settings-form').on('submit', function(e) {
-        const apiKey = $('#woo_pennylane_api_key').val();
-        const journalCode = $('#woo_pennylane_journal_code').val();
-        const accountNumber = $('#woo_pennylane_account_number').val();
-
-        if (!apiKey || !journalCode || !accountNumber) {
-            e.preventDefault();
-            alert(wooPennylaneParams.requiredFieldsMessage);
-            return false;
-        }
-    });
-
-    // Test de connexion API
+    // Test de la connexion API
     $('#woo-pennylane-test-connection').on('click', function(e) {
         e.preventDefault();
         
         const button = $(this);
-        const notificationManager = new NotificationManager(button);
+        const apiKey = $('#woo_pennylane_api_key').val();
         
         button.prop('disabled', true);
-        const spinner = $('<span>', {
-            class: 'woo-pennylane-spinner spinner is-active'
-        });
-        button.after(spinner);
+        button.after('<span class="spinner is-active"></span>');
 
         $.ajax({
-            url: ajaxurl,
+            url: wooPennylaneParams.ajaxUrl,
             type: 'POST',
             data: {
                 action: 'woo_pennylane_test_connection',
-                nonce: button.data('nonce'),
-                api_key: $('#woo_pennylane_api_key').val()
+                nonce: wooPennylaneParams.nonce,
+                api_key: apiKey
             },
             success: function(response) {
-                spinner.remove();
-                notificationManager.show(
-                    response.message,
-                    response.success ? 'success' : 'error'
-                );
-                button.prop('disabled', false);
+                button.next('.spinner').remove();
+                
+                if (response.success) {
+                    button.after('<div class="notice notice-success inline"><p>' + response.data + '</p></div>');
+                } else {
+                    button.after('<div class="notice notice-error inline"><p>' + response.data + '</p></div>');
+                }
+                
+                setTimeout(function() {
+                    button.next('.notice').fadeOut(function() {
+                        $(this).remove();
+                    });
+                }, 3000);
             },
             error: function() {
-                spinner.remove();
-                notificationManager.show(
-                    wooPennylaneParams.connectionErrorMessage,
-                    'error'
-                );
+                button.next('.spinner').remove();
+                button.after('<div class="notice notice-error inline"><p>Erreur de communication avec le serveur</p></div>');
+                
+                setTimeout(function() {
+                    button.next('.notice').fadeOut(function() {
+                        $(this).remove();
+                    });
+                }, 3000);
+            },
+            complete: function() {
                 button.prop('disabled', false);
             }
         });
     });
 
-    // Masquer/Afficher la clé API
-    $('.woo-pennylane-toggle-visibility').on('click', function(e) {
+    // Analyse des commandes
+    $('#analyze-orders').on('click', function(e) {
         e.preventDefault();
-        const input = $('#woo_pennylane_api_key');
-        const type = input.attr('type');
         
-        input.attr('type', type === 'password' ? 'text' : 'password');
-        $(this).text(type === 'password' ? 
-            wooPennylaneParams.hideText : 
-            wooPennylaneParams.showText
-        );
+        const button = $(this);
+        const dateStart = $('#sync-date-start').val();
+        const dateEnd = $('#sync-date-end').val();
+        
+        if (!dateStart || !dateEnd) {
+            alert('Veuillez sélectionner une période');
+            return;
+        }
+
+        button.prop('disabled', true);
+        button.after('<span class="spinner is-active"></span>');
+
+        $.ajax({
+            url: wooPennylaneParams.ajaxUrl,
+            type: 'POST',
+            data: {
+                action: 'woo_pennylane_analyze_orders',
+                nonce: wooPennylaneParams.nonce,
+                date_start: dateStart,
+                date_end: dateEnd
+            },
+            success: function(response) {
+                button.next('.spinner').remove();
+                
+                if (response.success) {
+                    const data = response.data;
+                    
+                    $('#orders-found').text(data.total);
+                    $('#orders-synced').text(data.synced);
+                    $('#orders-to-sync').text(data.to_sync);
+                    
+                    $('#sync-results').show();
+                    $('#start-sync').prop('disabled', data.to_sync === 0);
+                } else {
+                    alert(response.data);
+                }
+            },
+            error: function() {
+                button.next('.spinner').remove();
+                alert('Erreur de communication avec le serveur');
+            },
+            complete: function() {
+                button.prop('disabled', false);
+            }
+        });
+    });
+
+    // Synchronisation des commandes
+    $('#start-sync').on('click', function(e) {
+        e.preventDefault();
+        
+        const button = $(this);
+        const dateStart = $('#sync-date-start').val();
+        const dateEnd = $('#sync-date-end').val();
+        
+        button.prop('disabled', true);
+        $('#sync-progress').show();
+        
+        let progress = 0;
+        const totalOrders = parseInt($('#orders-to-sync').text(), 10);
+        let processedOrders = 0;
+
+        function updateProgress(current, total) {
+            const percentage = Math.round((current / total) * 100);
+            $('.progress-bar-inner').css('width', percentage + '%');
+            $('.progress-text').text(percentage + '%');
+        }
+
+        function addLogEntry(message, type) {
+            const entry = $('<div class="log-entry ' + type + '">' + message + '</div>');
+            $('#sync-log-content').prepend(entry);
+        }
+
+        function syncNextBatch() {
+            $.ajax({
+                url: wooPennylaneParams.ajaxUrl,
+                type: 'POST',
+                data: {
+                    action: 'woo_pennylane_sync_orders',
+                    nonce: wooPennylaneParams.nonce,
+                    date_start: dateStart,
+                    date_end: dateEnd,
+                    offset: processedOrders
+                },
+                success: function(response) {
+                    if (response.success) {
+                        processedOrders += response.data.processed;
+                        
+                        response.data.results.forEach(function(result) {
+                            addLogEntry(result.message, result.status);
+                        });
+                        
+                        updateProgress(processedOrders, totalOrders);
+                        
+                        if (processedOrders < totalOrders) {
+                            syncNextBatch();
+                        } else {
+                            button.prop('disabled', false);
+                            addLogEntry('Synchronisation terminée', 'success');
+                        }
+                    } else {
+                        button.prop('disabled', false);
+                        addLogEntry('Erreur : ' + response.data, 'error');
+                    }
+                },
+                error: function() {
+                    button.prop('disabled', false);
+                    addLogEntry('Erreur de communication avec le serveur', 'error');
+                }
+            });
+        }
+
+        // Démarrer la synchronisation
+        syncNextBatch();
+    });
+
+    // Gestion de la visibilité des champs password
+    $('input[type="password"]').each(function() {
+        const input = $(this);
+        const showButton = $('<button type="button" class="button button-secondary toggle-password">Afficher</button>');
+        
+        input.after(showButton);
+        
+        showButton.on('click', function(e) {
+            e.preventDefault();
+            if (input.attr('type') === 'password') {
+                input.attr('type', 'text');
+                showButton.text('Masquer');
+            } else {
+                input.attr('type', 'password');
+                showButton.text('Afficher');
+            }
+        });
     });
 });

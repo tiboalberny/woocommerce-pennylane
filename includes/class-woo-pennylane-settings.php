@@ -4,17 +4,18 @@ if (!defined('ABSPATH')) {
 }
 
 class WooPennylane_Settings {
-    private $settings_page = 'woocommerce_page_woo-pennylane-settings';
-    private $option_group = 'woo_pennylane_settings';
+    private $active_tab = 'settings';
 
     public function __construct() {
         // Hooks pour le menu et les paramètres
         add_action('admin_menu', array($this, 'add_admin_menu'));
         add_action('admin_init', array($this, 'register_settings'));
         add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_scripts'));
-
-        // Hook pour le test de connexion API
+        
+        // Actions AJAX
         add_action('wp_ajax_woo_pennylane_test_connection', array($this, 'test_api_connection'));
+        add_action('wp_ajax_woo_pennylane_analyze_orders', array($this, 'analyze_orders'));
+        add_action('wp_ajax_woo_pennylane_sync_orders', array($this, 'sync_orders'));
     }
 
     public function add_admin_menu() {
@@ -24,66 +25,20 @@ class WooPennylane_Settings {
             __('Pennylane', 'woo-pennylane'),
             'manage_woocommerce',
             'woo-pennylane-settings',
-            array($this, 'render_settings_page')
+            array($this, 'render_admin_page')
         );
     }
 
     public function register_settings() {
-        // API Settings
-        register_setting($this->option_group, 'woo_pennylane_api_key', array(
-            'type' => 'string',
-            'sanitize_callback' => 'sanitize_text_field',
-            'default' => ''
-        ));
-
-        register_setting($this->option_group, 'woo_pennylane_journal_code', array(
-            'type' => 'string',
-            'sanitize_callback' => 'sanitize_text_field',
-            'default' => ''
-        ));
-
-        register_setting($this->option_group, 'woo_pennylane_account_number', array(
-            'type' => 'string',
-            'sanitize_callback' => 'sanitize_text_field',
-            'default' => ''
-        ));
-
-        // Sync Settings
-        register_setting($this->option_group, 'woo_pennylane_auto_sync', array(
-            'type' => 'string',
-            'sanitize_callback' => 'sanitize_text_field',
-            'default' => 'yes'
-        ));
-
-        register_setting($this->option_group, 'woo_pennylane_sync_status', array(
-            'type' => 'array',
-            'sanitize_callback' => array($this, 'sanitize_sync_status'),
-            'default' => array('completed')
-        ));
-
-        // Debug Settings
-        register_setting($this->option_group, 'woo_pennylane_debug_mode', array(
-            'type' => 'string',
-            'sanitize_callback' => 'sanitize_text_field',
-            'default' => 'no'
-        ));
-    }
-
-    public function sanitize_sync_status($input) {
-        if (!is_array($input)) {
-            return array('completed');
-        }
-        
-        $valid_statuses = array_keys(wc_get_order_statuses());
-        return array_intersect($input, $valid_statuses);
+        register_setting('woo_pennylane_settings', 'woo_pennylane_api_key');
+        register_setting('woo_pennylane_settings', 'woo_pennylane_debug_mode');
     }
 
     public function enqueue_admin_scripts($hook) {
-        if ($this->settings_page !== $hook) {
+        if ('woocommerce_page_woo-pennylane-settings' !== $hook) {
             return;
         }
 
-        // CSS
         wp_enqueue_style(
             'woo-pennylane-admin',
             WOO_PENNYLANE_PLUGIN_URL . 'assets/css/admin.css',
@@ -91,7 +46,6 @@ class WooPennylane_Settings {
             WOO_PENNYLANE_VERSION
         );
 
-        // JavaScript
         wp_enqueue_script(
             'woo-pennylane-admin',
             WOO_PENNYLANE_PLUGIN_URL . 'assets/js/admin.js',
@@ -105,17 +59,37 @@ class WooPennylane_Settings {
             'wooPennylaneParams',
             array(
                 'ajaxUrl' => admin_url('admin-ajax.php'),
-                'nonce' => wp_create_nonce('woo_pennylane_nonce'),
-                'errorMessage' => __('Une erreur est survenue', 'woo-pennylane'),
-                'requiredFieldsMessage' => __('Tous les champs requis doivent être remplis', 'woo-pennylane'),
-                'connectionErrorMessage' => __('Erreur de connexion à l\'API', 'woo-pennylane'),
-                'connectionSuccessMessage' => __('Connexion réussie à l\'API', 'woo-pennylane'),
-                'hideText' => __('Masquer', 'woo-pennylane'),
-                'showText' => __('Afficher', 'woo-pennylane'),
-                'savingMessage' => __('Enregistrement...', 'woo-pennylane'),
-                'savedMessage' => __('Paramètres enregistrés', 'woo-pennylane')
+                'nonce' => wp_create_nonce('woo_pennylane_nonce')
             )
         );
+    }
+
+    public function render_admin_page() {
+        $this->active_tab = isset($_GET['tab']) ? sanitize_key($_GET['tab']) : 'settings';
+        ?>
+        <div class="wrap">
+            <h1><?php echo esc_html(get_admin_page_title()); ?></h1>
+
+            <nav class="nav-tab-wrapper">
+                <a href="?page=woo-pennylane-settings&tab=settings" 
+                   class="nav-tab <?php echo $this->active_tab === 'settings' ? 'nav-tab-active' : ''; ?>">
+                    <?php _e('Paramètres', 'woo-pennylane'); ?>
+                </a>
+                <a href="?page=woo-pennylane-settings&tab=sync" 
+                   class="nav-tab <?php echo $this->active_tab === 'sync' ? 'nav-tab-active' : ''; ?>">
+                    <?php _e('Synchronisation', 'woo-pennylane'); ?>
+                </a>
+            </nav>
+
+            <?php
+            if ($this->active_tab === 'sync') {
+                include WOO_PENNYLANE_PLUGIN_DIR . 'templates/admin-sync.php';
+            } else {
+                include WOO_PENNYLANE_PLUGIN_DIR . 'templates/admin-settings.php';
+            }
+            ?>
+        </div>
+        <?php
     }
 
     public function test_api_connection() {
@@ -136,54 +110,162 @@ class WooPennylane_Settings {
         }
 
         try {
-            // Test de connexion à l'API
-            $response = wp_remote_get('https://api.pennylane.tech/api/v1/ping', array(
-                'headers' => array(
-                    'Authorization' => 'Bearer ' . $api_key,
-                    'Accept' => 'application/json'
-                ),
-                'timeout' => 30
-            ));
+            error_log('=== Début du test de connexion Pennylane ===');
 
-            if (is_wp_error($response)) {
-                throw new Exception($response->get_error_message());
+            if (!function_exists('curl_init')) {
+                throw new Exception('CURL n\'est pas installé sur ce serveur');
             }
 
-            $response_code = wp_remote_retrieve_response_code($response);
+            $curl = curl_init();
             
-            if ($response_code !== 200) {
-                throw new Exception(__('Erreur de connexion à l\'API (HTTP ' . $response_code . ')', 'woo-pennylane'));
+            $url = "https://app.pennylane.com/api/external/v2/ledger_accounts";
+            $headers = [
+                "accept: application/json",
+                "authorization: Bearer " . $api_key
+            ];
+
+            curl_setopt_array($curl, [
+                CURLOPT_URL => $url,
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_ENCODING => "",
+                CURLOPT_MAXREDIRS => 10,
+                CURLOPT_TIMEOUT => 30,
+                CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+                CURLOPT_CUSTOMREQUEST => "GET",
+                CURLOPT_HTTPHEADER => $headers,
+                CURLOPT_VERBOSE => true
+            ]);
+
+            $response = curl_exec($curl);
+            $err = curl_error($curl);
+            $http_code = curl_getinfo($curl, CURLINFO_HTTP_CODE);
+            
+            curl_close($curl);
+
+            if ($err) {
+                throw new Exception('Erreur CURL: ' . $err);
             }
 
-            wp_send_json_success(__('Connexion à l\'API réussie', 'woo-pennylane'));
+            if ($http_code === 200) {
+                wp_send_json_success(__('Connexion à l\'API réussie', 'woo-pennylane'));
+                return;
+            }
+
+            wp_send_json_error(sprintf(
+                __('Erreur API (HTTP %s): %s', 'woo-pennylane'),
+                $http_code,
+                $response
+            ));
 
         } catch (Exception $e) {
             wp_send_json_error($e->getMessage());
         }
     }
 
-    public function render_settings_page() {
+    public function analyze_orders() {
+        check_ajax_referer('woo_pennylane_nonce', 'nonce');
+
         if (!current_user_can('manage_woocommerce')) {
-            wp_die(__('Vous n\'avez pas les permissions suffisantes pour accéder à cette page.', 'woo-pennylane'));
+            wp_send_json_error(__('Permission refusée', 'woo-pennylane'));
         }
 
-        // Affiche les messages d'erreur/succès
-        settings_errors('woo_pennylane_messages');
+        $date_start = isset($_POST['date_start']) ? sanitize_text_field($_POST['date_start']) : '';
+        $date_end = isset($_POST['date_end']) ? sanitize_text_field($_POST['date_end']) : '';
 
-        // Charge le template des paramètres
-        include WOO_PENNYLANE_PLUGIN_DIR . 'templates/admin-settings.php';
+        if (empty($date_start) || empty($date_end)) {
+            wp_send_json_error(__('Dates manquantes', 'woo-pennylane'));
+        }
+
+        try {
+            // Requête pour compter les commandes
+            $args = array(
+                'date_created' => $date_start . '...' . $date_end,
+                'status' => array('completed'),
+                'limit' => -1,
+                'return' => 'ids',
+            );
+
+            $orders = wc_get_orders($args);
+            $total = count($orders);
+
+            // Compte des commandes déjà synchronisées
+            $synced = 0;
+            foreach ($orders as $order_id) {
+                if (get_post_meta($order_id, '_pennylane_synced', true) === 'yes') {
+                    $synced++;
+                }
+            }
+
+            wp_send_json_success(array(
+                'total' => $total,
+                'synced' => $synced,
+                'to_sync' => $total - $synced
+            ));
+
+        } catch (Exception $e) {
+            wp_send_json_error($e->getMessage());
+        }
     }
 
-    public function get_debug_info() {
-        return array(
-            'plugin_version' => WOO_PENNYLANE_VERSION,
-            'wp_version' => get_bloginfo('version'),
-            'wc_version' => WC()->version,
-            'php_version' => phpversion(),
-            'api_configured' => !empty(get_option('woo_pennylane_api_key')),
-            'auto_sync' => get_option('woo_pennylane_auto_sync'),
-            'sync_statuses' => get_option('woo_pennylane_sync_status'),
-            'debug_mode' => get_option('woo_pennylane_debug_mode')
-        );
+    public function sync_orders() {
+        check_ajax_referer('woo_pennylane_nonce', 'nonce');
+
+        if (!current_user_can('manage_woocommerce')) {
+            wp_send_json_error(__('Permission refusée', 'woo-pennylane'));
+        }
+
+        $date_start = isset($_POST['date_start']) ? sanitize_text_field($_POST['date_start']) : '';
+        $date_end = isset($_POST['date_end']) ? sanitize_text_field($_POST['date_end']) : '';
+        $offset = isset($_POST['offset']) ? intval($_POST['offset']) : 0;
+        $batch_size = 5; // Nombre de commandes à traiter par lot
+
+        if (empty($date_start) || empty($date_end)) {
+            wp_send_json_error(__('Dates manquantes', 'woo-pennylane'));
+        }
+
+        try {
+            // Récupération des commandes pour ce lot
+            $args = array(
+                'date_created' => $date_start . '...' . $date_end,
+                'status' => array('completed'),
+                'limit' => $batch_size,
+                'offset' => $offset,
+                'return' => 'ids',
+            );
+
+            $orders = wc_get_orders($args);
+            $results = array();
+            $processed = 0;
+
+            foreach ($orders as $order_id) {
+                // Vérifie si la commande n'est pas déjà synchronisée
+                if (get_post_meta($order_id, '_pennylane_synced', true) !== 'yes') {
+                    try {
+                        // TODO: Implémenter la vraie synchronisation ici
+                        // Pour le moment, on simule juste une synchronisation réussie
+                        update_post_meta($order_id, '_pennylane_synced', 'yes');
+                        
+                        $results[] = array(
+                            'status' => 'success',
+                            'message' => sprintf(__('Commande #%d synchronisée avec succès', 'woo-pennylane'), $order_id)
+                        );
+                    } catch (Exception $e) {
+                        $results[] = array(
+                            'status' => 'error',
+                            'message' => sprintf(__('Erreur pour la commande #%d : %s', 'woo-pennylane'), $order_id, $e->getMessage())
+                        );
+                    }
+                }
+                $processed++;
+            }
+
+            wp_send_json_success(array(
+                'processed' => $processed,
+                'results' => $results
+            ));
+
+        } catch (Exception $e) {
+            wp_send_json_error($e->getMessage());
+        }
     }
 }

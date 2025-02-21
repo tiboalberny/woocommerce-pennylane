@@ -1,96 +1,123 @@
-/* Style principal de la page de paramètres */
-.woo-pennylane-settings {
-    max-width: 960px;
-    margin: 20px 0;
+/* Styles généraux */
+.woo-pennylane-sync .card {
+    max-width: 100%;
+    margin-top: 20px;
     padding: 20px;
     background: #fff;
     box-shadow: 0 1px 3px rgba(0,0,0,0.1);
 }
 
-.woo-pennylane-settings .form-table th {
-    width: 250px;
-    padding: 20px;
+/* Contrôles de date */
+.sync-controls {
+    margin: 20px 0;
 }
 
-.woo-pennylane-settings .form-table td {
-    padding: 20px;
+.date-inputs {
+    margin-bottom: 20px;
 }
 
-.woo-pennylane-settings .description {
-    margin-top: 5px;
-    color: #666;
-    font-style: italic;
+.date-inputs label {
+    display: inline-block;
+    margin-right: 20px;
 }
 
-/* Champs de formulaire */
-.woo-pennylane-settings input[type="text"],
-.woo-pennylane-settings input[type="password"] {
-    width: 400px;
-    padding: 8px;
+.date-inputs input[type="date"] {
+    padding: 5px;
     border: 1px solid #ddd;
     border-radius: 4px;
 }
 
-.woo-pennylane-settings input[type="checkbox"] {
-    margin-right: 10px;
+/* Statistiques */
+.sync-stats {
+    display: flex;
+    margin: 20px 0;
+    gap: 30px;
 }
 
-/* Boutons et actions */
-.woo-pennylane-resync {
-    margin-left: 10px !important;
+.stat-item {
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 4px;
+    text-align: center;
+}
+
+.stat-item .label {
+    display: block;
+    margin-bottom: 10px;
+    color: #666;
+}
+
+.stat-item .value {
+    font-size: 24px;
+    font-weight: bold;
+    color: #2271b1;
+}
+
+/* Barre de progression */
+.progress-bar {
+    height: 20px;
+    background: #f0f0f1;
+    border-radius: 10px;
+    overflow: hidden;
+    margin: 20px 0;
+}
+
+.progress-bar-inner {
+    height: 100%;
+    background: #2271b1;
+    border-radius: 10px;
+    transition: width 0.3s ease;
     position: relative;
 }
 
-.woo-pennylane-spinner {
-    display: inline-block;
-    visibility: visible;
-    margin: 0 10px;
-    vertical-align: middle;
+.progress-text {
+    position: absolute;
+    width: 100%;
+    text-align: center;
+    color: #fff;
+    font-size: 12px;
+    line-height: 20px;
 }
 
-/* Messages de statut */
-.woo-pennylane-success {
-    color: #46b450;
-    display: inline-block;
-    margin-left: 10px;
-    padding: 5px 10px;
-    background: #edfaef;
-    border-radius: 3px;
-}
-
-.woo-pennylane-error {
-    color: #dc3232;
-    display: inline-block;
-    margin-left: 10px;
-    padding: 5px 10px;
-    background: #fbeaea;
-    border-radius: 3px;
-}
-
-/* Section Debug */
-.woo-pennylane-debug {
-    margin-top: 30px;
-    padding: 20px;
-    background: #f9f9f9;
-    border: 1px solid #e5e5e5;
+/* Journal de synchronisation */
+.sync-log {
+    margin-top: 20px;
+    border: 1px solid #ddd;
     border-radius: 4px;
+    padding: 15px;
+    background: #f8f9fa;
 }
 
-.woo-pennylane-debug h3 {
-    margin-top: 0;
-    padding-bottom: 10px;
-    border-bottom: 1px solid #eee;
+#sync-log-content {
+    max-height: 300px;
+    overflow-y: auto;
+    padding: 10px;
+    font-family: monospace;
 }
 
-/* Responsive design */
-@media screen and (max-width: 782px) {
-    .woo-pennylane-settings .form-table th {
-        width: 100%;
-        display: block;
-    }
-    
-    .woo-pennylane-settings input[type="text"],
-    .woo-pennylane-settings input[type="password"] {
-        width: 100%;
-    }
+.log-entry {
+    margin: 5px 0;
+    padding: 5px;
+    border-radius: 3px;
+}
+
+.log-entry.success {
+    background: #edfaef;
+    color: #0a3622;
+}
+
+.log-entry.error {
+    background: #fbeaea;
+    color: #8b343c;
+}
+
+/* Actions */
+.sync-actions {
+    margin-top: 20px;
+}
+
+/* Loader */
+.spinner {
+    float: none;
+    margin: 0 10px;
 }

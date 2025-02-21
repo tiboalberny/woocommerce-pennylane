@@ -1,77 +1,69 @@
 <?php
-namespace WooPennylane\Integration;
+if (!defined('ABSPATH')) {
+    exit;
+}
 
-use WooPennylane\Api\Client;
-
-class Synchronizer {
-    private $api_client;
-    private $logger;
+class WooPennylane_Synchronizer {
+    private $api_key;
+    private $api_url = 'https://app.pennylane.com/api/external/v2';
 
     public function __construct() {
-        $this->api_client = new Client();
-        $this->logger = wc_get_logger();
-
-        // Hook pour les nouvelles commandes
-        add_action('woocommerce_order_status_completed', array($this, 'sync_order'));
-        
-        // Hook pour la resynchronisation manuelle
-        add_action('wp_ajax_woo_pennylane_resync_order', array($this, 'handle_manual_sync'));
-        
-        // Ajout du bouton de resync dans l'admin
-        add_action('woocommerce_admin_order_actions_end', array($this, 'add_resync_button'));
+        $this->api_key = get_option('woo_pennylane_api_key');
     }
 
+    /**
+     * Synchronise une commande vers Pennylane
+     */
     public function sync_order($order_id) {
         $order = wc_get_order($order_id);
         
         if (!$order) {
-            $this->log("Erreur: Commande #$order_id introuvable", 'error');
-            return false;
-        }
-
-        // Vérifie si la commande a déjà été synchronisée
-        if ($order->get_meta('_pennylane_synced') === 'yes') {
-            $this->log("Commande #$order_id déjà synchronisée", 'notice');
-            return true;
+            throw new Exception(__('Commande introuvable', 'woo-pennylane'));
         }
 
         try {
+            // Prépare les données de la facture
             $invoice_data = $this->prepare_invoice_data($order);
-            $response = $this->api_client->send_invoice($invoice_data);
 
-            if (isset($response['id'])) {
-                $order->add_meta_data('_pennylane_synced', 'yes', true);
-                $order->add_meta_data('_pennylane_invoice_id', $response['id'], true);
-                $order->save();
+            // Envoie à l'API Pennylane
+            $response = $this->send_to_api('/invoices', $invoice_data);
 
-                $this->log("Commande #$order_id synchronisée avec succès", 'info');
-                return true;
-            } else {
-                throw new \Exception('Réponse API invalide');
+            // Met à jour le statut de synchronisation
+            update_post_meta($order_id, '_pennylane_synced', 'yes');
+            update_post_meta($order_id, '_pennylane_invoice_id', $response['id']);
+
+            return true;
+
+        } catch (Exception $e) {
+            // Log l'erreur
+            if (get_option('woo_pennylane_debug_mode') === 'yes') {
+                error_log('Pennylane Sync Error (Order #' . $order_id . '): ' . $e->getMessage());
             }
-        } catch (\Exception $e) {
-            $this->log("Erreur lors de la synchronisation de la commande #$order_id: " . $e->getMessage(), 'error');
-            return false;
+            throw $e;
         }
     }
 
+    /**
+     * Prépare les données de la facture au format Pennylane
+     */
     private function prepare_invoice_data($order) {
-        // Informations client
+        // Information client
         $customer = array(
             'name' => $order->get_billing_first_name() . ' ' . $order->get_billing_last_name(),
             'email' => $order->get_billing_email(),
             'address' => array(
                 'street' => $order->get_billing_address_1(),
-                'street2' => $order->get_billing_address_2(),
-                'city' => $order->get_billing_city(),
-                'state' => $order->get_billing_state(),
+                'street_line_2' => $order->get_billing_address_2(),
                 'postal_code' => $order->get_billing_postcode(),
+                'city' => $order->get_billing_city(),
                 'country' => $order->get_billing_country()
             )
         );
 
-        // Lignes de facture
+        // Lignes de la facture
         $line_items = array();
+        
+        // Produits
         foreach ($order->get_items() as $item) {
             $product = $item->get_product();
             $unit_price = $order->get_item_total($item, false, false);
@@ -84,7 +76,7 @@ class Synchronizer {
                 'vat_rate' => $tax_rate,
                 'product_id' => $product ? $product->get_id() : null,
                 'sku' => $product ? $product->get_sku() : '',
-                'account_number' => get_option('woo_pennylane_account_number')
+                'category' => 'GOODS'
             );
         }
 
@@ -92,95 +84,120 @@ class Synchronizer {
         if ($order->get_shipping_total() > 0) {
             $shipping_tax_rate = $this->get_shipping_tax_rate($order);
             $line_items[] = array(
-                'description' => __('Shipping', 'woo-pennylane'),
+                'description' => __('Frais de livraison', 'woo-pennylane'),
                 'quantity' => 1,
                 'unit_price_without_vat' => $order->get_shipping_total(),
                 'vat_rate' => $shipping_tax_rate,
-                'account_number' => get_option('woo_pennylane_shipping_account_number', get_option('woo_pennylane_account_number'))
+                'category' => 'SHIPPING'
             );
         }
 
         return array(
             'customer' => $customer,
-            'journal_code' => get_option('woo_pennylane_journal_code'),
             'date' => $order->get_date_created()->format('Y-m-d'),
-            'due_date' => $order->get_date_created()->modify('+30 days')->format('Y-m-d'),
-            'invoice_number' => $order->get_order_number(),
             'currency' => $order->get_currency(),
-            'line_items' => $line_items,
+            'ref' => $order->get_order_number(),
+            'items' => $line_items,
             'payment_method' => $order->get_payment_method_title(),
-            'notes' => $order->get_customer_note(),
-            'reference' => 'WC-' . $order->get_id(),
-            'total_without_vat' => $order->get_total() - $order->get_total_tax(),
-            'total_vat' => $order->get_total_tax(),
-            'total_with_vat' => $order->get_total()
+            'notes' => $order->get_customer_note()
         );
     }
 
+    /**
+     * Calcule le taux de TVA d'un article
+     */
     private function get_item_tax_rate($item) {
         $tax_items = $item->get_taxes();
         if (empty($tax_items['total'])) {
             return 0;
         }
 
-        $tax_rate = 0;
-        foreach ($tax_items['total'] as $tax_id => $tax_amount) {
-            if ($tax_amount > 0) {
-                $rate = \WC_Tax::_get_tax_rate($tax_id);
-                $tax_rate += floatval($rate['tax_rate']);
-            }
+        $total_tax = 0;
+        $total_net = $item->get_total();
+
+        foreach ($tax_items['total'] as $tax_id => $tax_total) {
+            $total_tax += (float) $tax_total;
         }
-        
-        return $tax_rate;
+
+        return $total_net > 0 ? round(($total_tax / $total_net) * 100, 2) : 0;
     }
 
+    /**
+     * Calcule le taux de TVA des frais de livraison
+     */
     private function get_shipping_tax_rate($order) {
-        $shipping_tax_total = $order->get_shipping_tax();
+        $shipping_tax = $order->get_shipping_tax();
         $shipping_total = $order->get_shipping_total();
 
-        if ($shipping_total > 0 && $shipping_tax_total > 0) {
-            return ($shipping_tax_total / $shipping_total) * 100;
-        }
-
-        return 0;
+        return $shipping_total > 0 ? round(($shipping_tax / $shipping_total) * 100, 2) : 0;
     }
 
-    public function handle_manual_sync() {
-        if (!current_user_can('manage_woocommerce')) {
-            wp_die(-1);
+    /**
+     * Envoie une requête à l'API Pennylane
+     */
+    private function send_to_api($endpoint, $data = null) {
+        if (empty($this->api_key)) {
+            throw new Exception(__('Clé API non configurée', 'woo-pennylane'));
         }
 
-        $order_id = isset($_POST['order_id']) ? absint($_POST['order_id']) : 0;
-        $nonce = isset($_POST['nonce']) ? sanitize_text_field($_POST['nonce']) : '';
+        $url = $this->api_url . $endpoint;
+        
+        $headers = array(
+            'accept: application/json',
+            'authorization: Bearer ' . $this->api_key,
+            'content-type: application/json'
+        );
 
-        if (!wp_verify_nonce($nonce, 'woo_pennylane_resync_' . $order_id)) {
-            wp_die(-1);
+        $curl = curl_init();
+
+        $curl_options = array(
+            CURLOPT_URL => $url,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_ENCODING => '',
+            CURLOPT_MAXREDIRS => 10,
+            CURLOPT_TIMEOUT => 30,
+            CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+            CURLOPT_HTTPHEADER => $headers
+        );
+
+        if ($data !== null) {
+            $curl_options[CURLOPT_CUSTOMREQUEST] = 'POST';
+            $curl_options[CURLOPT_POSTFIELDS] = json_encode($data);
         }
 
-        $result = $this->sync_order($order_id);
+        curl_setopt_array($curl, $curl_options);
 
-        wp_send_json(array(
-            'success' => $result,
-            'message' => $result 
-                ? __('Order successfully synchronized', 'woo-pennylane')
-                : __('Synchronization failed', 'woo-pennylane')
-        ));
-    }
+        $response = curl_exec($curl);
+        $err = curl_error($curl);
+        $http_code = curl_getinfo($curl, CURLINFO_HTTP_CODE);
 
-    public function add_resync_button($order) {
-        ?>
-        <button type="button" 
-                class="button woo-pennylane-resync" 
-                data-order-id="<?php echo esc_attr($order->get_id()); ?>"
-                data-nonce="<?php echo wp_create_nonce('woo_pennylane_resync_' . $order->get_id()); ?>">
-            <?php _e('Sync to Pennylane', 'woo-pennylane'); ?>
-        </button>
-        <?php
-    }
+        curl_close($curl);
 
-    private function log($message, $level = 'info') {
+        // Log en mode debug
         if (get_option('woo_pennylane_debug_mode') === 'yes') {
-            $this->logger->log($level, $message, array('source' => 'woo-pennylane'));
+            error_log('Pennylane API Request: ' . $url);
+            error_log('Pennylane API Request Data: ' . json_encode($data));
+            error_log('Pennylane API Response Code: ' . $http_code);
+            error_log('Pennylane API Response: ' . $response);
+            if ($err) {
+                error_log('Pennylane API Error: ' . $err);
+            }
         }
+
+        if ($err) {
+            throw new Exception('Erreur cURL: ' . $err);
+        }
+
+        $response_data = json_decode($response, true);
+
+        if ($http_code >= 400) {
+            throw new Exception(
+                isset($response_data['message']) 
+                    ? $response_data['message'] 
+                    : 'Erreur API (HTTP ' . $http_code . ')'
+            );
+        }
+
+        return $response_data;
     }
 }
