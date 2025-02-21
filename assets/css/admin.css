@@ -1,0 +1,96 @@
+/* Style principal de la page de paramètres */
+.woo-pennylane-settings {
+    max-width: 960px;
+    margin: 20px 0;
+    padding: 20px;
+    background: #fff;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.woo-pennylane-settings .form-table th {
+    width: 250px;
+    padding: 20px;
+}
+
+.woo-pennylane-settings .form-table td {
+    padding: 20px;
+}
+
+.woo-pennylane-settings .description {
+    margin-top: 5px;
+    color: #666;
+    font-style: italic;
+}
+
+/* Champs de formulaire */
+.woo-pennylane-settings input[type="text"],
+.woo-pennylane-settings input[type="password"] {
+    width: 400px;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+
+.woo-pennylane-settings input[type="checkbox"] {
+    margin-right: 10px;
+}
+
+/* Boutons et actions */
+.woo-pennylane-resync {
+    margin-left: 10px !important;
+    position: relative;
+}
+
+.woo-pennylane-spinner {
+    display: inline-block;
+    visibility: visible;
+    margin: 0 10px;
+    vertical-align: middle;
+}
+
+/* Messages de statut */
+.woo-pennylane-success {
+    color: #46b450;
+    display: inline-block;
+    margin-left: 10px;
+    padding: 5px 10px;
+    background: #edfaef;
+    border-radius: 3px;
+}
+
+.woo-pennylane-error {
+    color: #dc3232;
+    display: inline-block;
+    margin-left: 10px;
+    padding: 5px 10px;
+    background: #fbeaea;
+    border-radius: 3px;
+}
+
+/* Section Debug */
+.woo-pennylane-debug {
+    margin-top: 30px;
+    padding: 20px;
+    background: #f9f9f9;
+    border: 1px solid #e5e5e5;
+    border-radius: 4px;
+}
+
+.woo-pennylane-debug h3 {
+    margin-top: 0;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #eee;
+}
+
+/* Responsive design */
+@media screen and (max-width: 782px) {
+    .woo-pennylane-settings .form-table th {
+        width: 100%;
+        display: block;
+    }
+    
+    .woo-pennylane-settings input[type="text"],
+    .woo-pennylane-settings input[type="password"] {
+        width: 100%;
+    }
+}

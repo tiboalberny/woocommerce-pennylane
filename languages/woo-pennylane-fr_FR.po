@@ -1,0 +1,161 @@
+# Copyright (C) 2025 Votre Nom
+# This file is distributed under the same license as the WooCommerce Pennylane Integration plugin.
+msgid ""
+msgstr ""
+"Project-Id-Version: WooCommerce Pennylane Integration 1.0.0\n"
+"Report-Msgid-Bugs-To: https://wordpress.org/support/plugin/woo-pennylane\n"
+"POT-Creation-Date: 2024-02-21T12:00:00+00:00\n"
+"PO-Revision-Date: 2024-02-21 12:00+0100\n"
+"Last-Translator: \n"
+"Language-Team: \n"
+"Language: fr_FR\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n > 1);\n"
+"X-Generator: Poedit 3.0.1\n"
+"X-Domain: woo-pennylane\n"
+
+#. Plugin Name of the plugin
+msgid "WooCommerce Pennylane Integration"
+msgstr "Intégration WooCommerce Pennylane"
+
+#. Plugin URI of the plugin
+msgid "https://votre-site.com/woo-pennylane"
+msgstr "https://votre-site.com/woo-pennylane"
+
+#. Description of the plugin
+msgid "Intégration entre WooCommerce et Pennylane pour la synchronisation des factures"
+msgstr "Intégration entre WooCommerce et Pennylane pour la synchronisation des factures"
+
+#. Author of the plugin
+msgid "Votre Nom"
+msgstr "Votre Nom"
+
+#: woocommerce-pennylane.php:189
+msgid "Une erreur est survenue"
+msgstr "Une erreur est survenue"
+
+#: woocommerce-pennylane.php:190
+msgid "Tous les champs requis doivent être remplis"
+msgstr "Tous les champs requis doivent être remplis"
+
+#: woocommerce-pennylane.php:191
+msgid "Erreur de connexion à l'API"
+msgstr "Erreur de connexion à l'API"
+
+#: woocommerce-pennylane.php:192
+msgid "Masquer"
+msgstr "Masquer"
+
+#: woocommerce-pennylane.php:193
+msgid "Afficher"
+msgstr "Afficher"
+
+#: woocommerce-pennylane.php:194
+msgid "Synchronisation réussie"
+msgstr "Synchronisation réussie"
+
+#: woocommerce-pennylane.php:195
+msgid "Échec de la synchronisation"
+msgstr "Échec de la synchronisation"
+
+#: includes/class-woo-pennylane-settings.php:31
+msgid "Configuration Pennylane"
+msgstr "Configuration Pennylane"
+
+#: includes/class-woo-pennylane-settings.php:45
+msgid "Clé API"
+msgstr "Clé API"
+
+#: includes/class-woo-pennylane-settings.php:52
+msgid "Votre clé API Pennylane. Vous pouvez la trouver dans les paramètres de votre compte Pennylane."
+msgstr "Votre clé API Pennylane. Vous pouvez la trouver dans les paramètres de votre compte Pennylane."
+
+#: includes/class-woo-pennylane-settings.php:58
+msgid "Code Journal"
+msgstr "Code Journal"
+
+#: includes/class-woo-pennylane-settings.php:65
+msgid "Code du journal des ventes dans Pennylane"
+msgstr "Code du journal des ventes dans Pennylane"
+
+#: includes/class-woo-pennylane-settings.php:71
+msgid "Numéro de Compte"
+msgstr "Numéro de Compte"
+
+#: includes/class-woo-pennylane-settings.php:78
+msgid "Numéro de compte pour les ventes"
+msgstr "Numéro de compte pour les ventes"
+
+#: includes/class-woo-pennylane-settings.php:84
+msgid "Mode Debug"
+msgstr "Mode Debug"
+
+#: includes/class-woo-pennylane-settings.php:91
+msgid "Active la journalisation détaillée pour le débogage"
+msgstr "Active la journalisation détaillée pour le débogage"
+
+#: includes/class-woo-pennylane-synchronizer.php:98
+msgid "Shipping"
+msgstr "Frais de port"
+
+#: templates/admin-settings.php:8
+msgid "Vous n'avez pas les permissions suffisantes pour accéder à cette page."
+msgstr "Vous n'avez pas les permissions suffisantes pour accéder à cette page."
+
+#: templates/admin-settings.php:89
+msgid "Configuration API"
+msgstr "Configuration API"
+
+#: templates/admin-settings.php:116
+msgid "Configuration Comptable"
+msgstr "Configuration Comptable"
+
+#: templates/admin-settings.php:143
+msgid "Options de Synchronisation"
+msgstr "Options de Synchronisation"
+
+#: templates/admin-settings.php:150
+msgid "Synchronisation Automatique"
+msgstr "Synchronisation Automatique"
+
+#: templates/admin-settings.php:157
+msgid "Activer la synchronisation automatique des commandes"
+msgstr "Activer la synchronisation automatique des commandes"
+
+#: templates/admin-settings.php:160
+msgid "Les commandes seront automatiquement synchronisées avec Pennylane lors du changement de statut."
+msgstr "Les commandes seront automatiquement synchronisées avec Pennylane lors du changement de statut."
+
+#: templates/admin-settings.php:167
+msgid "Statuts à Synchroniser"
+msgstr "Statuts à Synchroniser"
+
+#: templates/admin-settings.php:187
+msgid "Sélectionnez les statuts de commande qui déclencheront la synchronisation."
+msgstr "Sélectionnez les statuts de commande qui déclencheront la synchronisation."
+
+#: templates/admin-settings.php:195
+msgid "Débogage"
+msgstr "Débogage"
+
+#: templates/admin-settings.php:217
+msgid "Informations de Débogage"
+msgstr "Informations de Débogage"
+
+#: templates/admin-settings.php:220
+msgid "Version du Plugin"
+msgstr "Version du Plugin"
+
+#: templates/admin-settings.php:224
+msgid "Version de WordPress"
+msgstr "Version de WordPress"
+
+#: templates/admin-settings.php:228
+msgid "Version de WooCommerce"
+msgstr "Version de WooCommerce"
+
+#: templates/admin-settings.php:232
+msgid "Version de PHP"
+msgstr "Version de PHP"
