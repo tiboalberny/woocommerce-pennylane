@@ -1,11 +1,20 @@
 <?php
-namespace WooPennylane\Admin;
+if (!defined('ABSPATH')) {
+    exit;
+}
 
-class Settings {
+class WooPennylane_Settings {
+    private $settings_page = 'woocommerce_page_woo-pennylane-settings';
+    private $option_group = 'woo_pennylane_settings';
+
     public function __construct() {
+        // Hooks pour le menu et les paramètres
         add_action('admin_menu', array($this, 'add_admin_menu'));
         add_action('admin_init', array($this, 'register_settings'));
         add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_scripts'));
+
+        // Hook pour le test de connexion API
+        add_action('wp_ajax_woo_pennylane_test_connection', array($this, 'test_api_connection'));
     }
 
     public function add_admin_menu() {
@@ -20,36 +29,61 @@ class Settings {
     }
 
     public function register_settings() {
-        register_setting('woo_pennylane_settings', 'woo_pennylane_api_key', array(
+        // API Settings
+        register_setting($this->option_group, 'woo_pennylane_api_key', array(
             'type' => 'string',
             'sanitize_callback' => 'sanitize_text_field',
             'default' => ''
         ));
 
-        register_setting('woo_pennylane_settings', 'woo_pennylane_journal_code', array(
+        register_setting($this->option_group, 'woo_pennylane_journal_code', array(
             'type' => 'string',
             'sanitize_callback' => 'sanitize_text_field',
             'default' => ''
         ));
 
-        register_setting('woo_pennylane_settings', 'woo_pennylane_account_number', array(
+        register_setting($this->option_group, 'woo_pennylane_account_number', array(
             'type' => 'string',
             'sanitize_callback' => 'sanitize_text_field',
             'default' => ''
         ));
 
-        register_setting('woo_pennylane_settings', 'woo_pennylane_debug_mode', array(
+        // Sync Settings
+        register_setting($this->option_group, 'woo_pennylane_auto_sync', array(
+            'type' => 'string',
+            'sanitize_callback' => 'sanitize_text_field',
+            'default' => 'yes'
+        ));
+
+        register_setting($this->option_group, 'woo_pennylane_sync_status', array(
+            'type' => 'array',
+            'sanitize_callback' => array($this, 'sanitize_sync_status'),
+            'default' => array('completed')
+        ));
+
+        // Debug Settings
+        register_setting($this->option_group, 'woo_pennylane_debug_mode', array(
             'type' => 'string',
             'sanitize_callback' => 'sanitize_text_field',
             'default' => 'no'
         ));
     }
 
+    public function sanitize_sync_status($input) {
+        if (!is_array($input)) {
+            return array('completed');
+        }
+        
+        $valid_statuses = array_keys(wc_get_order_statuses());
+        return array_intersect($input, $valid_statuses);
+    }
+
     public function enqueue_admin_scripts($hook) {
-        if ('woocommerce_page_woo-pennylane-settings' !== $hook) {
+        if ($this->settings_page !== $hook) {
             return;
         }
 
+        // CSS
         wp_enqueue_style(
             'woo-pennylane-admin',
             WOO_PENNYLANE_PLUGIN_URL . 'assets/css/admin.css',
@@ -57,6 +91,7 @@ class Settings {
             WOO_PENNYLANE_VERSION
         );
 
+        // JavaScript
         wp_enqueue_script(
             'woo-pennylane-admin',
             WOO_PENNYLANE_PLUGIN_URL . 'assets/js/admin.js',
@@ -64,115 +99,91 @@ class Settings {
             WOO_PENNYLANE_VERSION,
             true
         );
+
+        wp_localize_script(
+            'woo-pennylane-admin',
+            'wooPennylaneParams',
+            array(
+                'ajaxUrl' => admin_url('admin-ajax.php'),
+                'nonce' => wp_create_nonce('woo_pennylane_nonce'),
+                'errorMessage' => __('Une erreur est survenue', 'woo-pennylane'),
+                'requiredFieldsMessage' => __('Tous les champs requis doivent être remplis', 'woo-pennylane'),
+                'connectionErrorMessage' => __('Erreur de connexion à l\'API', 'woo-pennylane'),
+                'connectionSuccessMessage' => __('Connexion réussie à l\'API', 'woo-pennylane'),
+                'hideText' => __('Masquer', 'woo-pennylane'),
+                'showText' => __('Afficher', 'woo-pennylane'),
+                'savingMessage' => __('Enregistrement...', 'woo-pennylane'),
+                'savedMessage' => __('Paramètres enregistrés', 'woo-pennylane')
+            )
+        );
+    }
+
+    public function test_api_connection() {
+        check_ajax_referer('woo_pennylane_nonce', 'nonce');
+
+        if (!current_user_can('manage_woocommerce')) {
+            wp_send_json_error(__('Permission refusée', 'woo-pennylane'));
+        }
+
+        $api_key = isset($_POST['api_key']) ? sanitize_text_field($_POST['api_key']) : '';
+        
+        if (empty($api_key)) {
+            $api_key = get_option('woo_pennylane_api_key');
+        }
+
+        if (empty($api_key)) {
+            wp_send_json_error(__('Clé API manquante', 'woo-pennylane'));
+        }
+
+        try {
+            // Test de connexion à l'API
+            $response = wp_remote_get('https://api.pennylane.tech/api/v1/ping', array(
+                'headers' => array(
+                    'Authorization' => 'Bearer ' . $api_key,
+                    'Accept' => 'application/json'
+                ),
+                'timeout' => 30
+            ));
+
+            if (is_wp_error($response)) {
+                throw new Exception($response->get_error_message());
+            }
+
+            $response_code = wp_remote_retrieve_response_code($response);
+            
+            if ($response_code !== 200) {
+                throw new Exception(__('Erreur de connexion à l\'API (HTTP ' . $response_code . ')', 'woo-pennylane'));
+            }
+
+            wp_send_json_success(__('Connexion à l\'API réussie', 'woo-pennylane'));
+
+        } catch (Exception $e) {
+            wp_send_json_error($e->getMessage());
+        }
     }
 
     public function render_settings_page() {
         if (!current_user_can('manage_woocommerce')) {
-            return;
+            wp_die(__('Vous n\'avez pas les permissions suffisantes pour accéder à cette page.', 'woo-pennylane'));
         }
 
-        // Messages de succès/erreur
-        if (isset($_GET['settings-updated'])) {
-            add_settings_error(
-                'woo_pennylane_messages',
-                'woo_pennylane_message',
-                __('Settings Saved', 'woo-pennylane'),
-                'updated'
-            );
-        }
-
+        // Affiche les messages d'erreur/succès
         settings_errors('woo_pennylane_messages');
-        
-        ?>
-        <div class="wrap">
-            <h1><?php echo esc_html(get_admin_page_title()); ?></h1>
-            
-            <form action="options.php" method="post">
-                <?php
-                settings_fields('woo_pennylane_settings');
-                do_settings_sections('woo_pennylane_settings');
-                ?>
-                
-                <table class="form-table">
-                    <tr>
-                        <th scope="row">
-                            <label for="woo_pennylane_api_key">
-                                <?php _e('API Key', 'woo-pennylane'); ?>
-                            </label>
-                        </th>
-                        <td>
-                            <input type="password" 
-                                   id="woo_pennylane_api_key" 
-                                   name="woo_pennylane_api_key" 
-                                   value="<?php echo esc_attr(get_option('woo_pennylane_api_key')); ?>" 
-                                   class="regular-text">
-                            <p class="description">
-                                <?php _e('Your Pennylane API key', 'woo-pennylane'); ?>
-                            </p>
-                        </td>
-                    </tr>
-                    
-                    <tr>
-                        <th scope="row">
-                            <label for="woo_pennylane_journal_code">
-                                <?php _e('Journal Code', 'woo-pennylane'); ?>
-                            </label>
-                        </th>
-                        <td>
-                            <input type="text" 
-                                   id="woo_pennylane_journal_code" 
-                                   name="woo_pennylane_journal_code"
-                                   value="<?php echo esc_attr(get_option('woo_pennylane_journal_code')); ?>" 
-                                   class="regular-text">
-                            <p class="description">
-                                <?php _e('Sales journal code in Pennylane', 'woo-pennylane'); ?>
-                            </p>
-                        </td>
-                    </tr>
-                    
-                    <tr>
-                        <th scope="row">
-                            <label for="woo_pennylane_account_number">
-                                <?php _e('Account Number', 'woo-pennylane'); ?>
-                            </label>
-                        </th>
-                        <td>
-                            <input type="text" 
-                                   id="woo_pennylane_account_number" 
-                                   name="woo_pennylane_account_number"
-                                   value="<?php echo esc_attr(get_option('woo_pennylane_account_number')); ?>" 
-                                   class="regular-text">
-                            <p class="description">
-                                <?php _e('Sales account number in Pennylane', 'woo-pennylane'); ?>
-                            </p>
-                        </td>
-                    </tr>
-                    
-                    <tr>
-                        <th scope="row">
-                            <label for="woo_pennylane_debug_mode">
-                                <?php _e('Debug Mode', 'woo-pennylane'); ?>
-                            </label>
-                        </th>
-                        <td>
-                            <label>
-                                <input type="checkbox" 
-                                       id="woo_pennylane_debug_mode" 
-                                       name="woo_pennylane_debug_mode"
-                                       value="yes" 
-                                       <?php checked(get_option('woo_pennylane_debug_mode'), 'yes'); ?>>
-                                <?php _e('Enable debug logging', 'woo-pennylane'); ?>
-                            </label>
-                            <p class="description">
-                                <?php _e('Log sync operations for debugging', 'woo-pennylane'); ?>
-                            </p>
-                        </td>
-                    </tr>
-                </table>
-                
-                <?php submit_button(); ?>
-            </form>
-        </div>
-        <?php
+
+        // Charge le template des paramètres
+        include WOO_PENNYLANE_PLUGIN_DIR . 'templates/admin-settings.php';
+    }
+
+    public function get_debug_info() {
+        return array(
+            'plugin_version' => WOO_PENNYLANE_VERSION,
+            'wp_version' => get_bloginfo('version'),
+            'wc_version' => WC()->version,
+            'php_version' => phpversion(),
+            'api_configured' => !empty(get_option('woo_pennylane_api_key')),
+            'auto_sync' => get_option('woo_pennylane_auto_sync'),
+            'sync_statuses' => get_option('woo_pennylane_sync_status'),
+            'debug_mode' => get_option('woo_pennylane_debug_mode')
+        );
     }
 }

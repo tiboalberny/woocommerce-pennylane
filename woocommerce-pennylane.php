@@ -22,45 +22,53 @@ if (!defined('ABSPATH')) {
 }
 
 // Définition des constantes
-if (!defined('WOO_PENNYLANE_VERSION')) {
-    define('WOO_PENNYLANE_VERSION', '1.0.0');
-}
-if (!defined('WOO_PENNYLANE_PLUGIN_DIR')) {
-    define('WOO_PENNYLANE_PLUGIN_DIR', plugin_dir_path(__FILE__));
-}
-if (!defined('WOO_PENNYLANE_PLUGIN_URL')) {
-    define('WOO_PENNYLANE_PLUGIN_URL', plugin_dir_url(__FILE__));
-}
-if (!defined('WOO_PENNYLANE_PLUGIN_FILE')) {
-    define('WOO_PENNYLANE_PLUGIN_FILE', __FILE__);
-}
+define('WOO_PENNYLANE_VERSION', '1.0.0');
+define('WOO_PENNYLANE_PLUGIN_DIR', plugin_dir_path(__FILE__));
+define('WOO_PENNYLANE_PLUGIN_URL', plugin_dir_url(__FILE__));
+define('WOO_PENNYLANE_PLUGIN_BASENAME', plugin_basename(__FILE__));
 
+/**
+ * Classe principale du plugin
+ */
 class WooPennylane {
+    /**
+     * Instance unique de la classe
+     */
     private static $instance = null;
+
+    /**
+     * Instance de la classe de paramètres
+     */
     private $settings = null;
 
-    public static function instance() {
+    /**
+     * Retourne l'instance unique de la classe
+     */
+    public static function get_instance() {
         if (self::$instance === null) {
             self::$instance = new self();
         }
         return self::$instance;
     }
 
+    /**
+     * Constructeur
+     */
     private function __construct() {
-        // Hooks d'activation et désactivation
-        register_activation_hook(WOO_PENNYLANE_PLUGIN_FILE, array($this, 'activate'));
-        register_deactivation_hook(WOO_PENNYLANE_PLUGIN_FILE, array($this, 'deactivate'));
+        // Hooks d'activation/désactivation
+        register_activation_hook(__FILE__, array($this, 'activate'));
+        register_deactivation_hook(__FILE__, array($this, 'deactivate'));
 
-        // Hook d'initialisation
+        // Initialisation du plugin
         add_action('plugins_loaded', array($this, 'init'));
 
-        // Hook pour les notices d'administration
+        // Ajout des notices admin
         add_action('admin_notices', array($this, 'admin_notices'));
-
-        // Hook pour les scripts admin
-        add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_scripts'));
     }
 
+    /**
+     * Initialisation du plugin
+     */
     public function init() {
         // Vérification des dépendances
         if (!$this->check_dependencies()) {
@@ -68,16 +76,15 @@ class WooPennylane {
         }
 
         // Chargement des traductions
-        load_plugin_textdomain(
-            'woo-pennylane',
-            false,
-            dirname(plugin_basename(WOO_PENNYLANE_PLUGIN_FILE)) . '/languages'
-        );
+        $this->load_textdomain();
 
-        // Chargement et initialisation des composants
-        $this->init_components();
+        // Chargement des composants
+        $this->load_classes();
     }
 
+    /**
+     * Vérifie que toutes les dépendances sont présentes
+     */
     private function check_dependencies() {
         if (!class_exists('WooCommerce')) {
             add_action('admin_notices', array($this, 'woocommerce_missing_notice'));
@@ -86,52 +93,74 @@ class WooPennylane {
         return true;
     }
 
-    private function init_components() {
-        try {
-            // Chargement des fichiers
-            require_once WOO_PENNYLANE_PLUGIN_DIR . 'includes/class-woo-pennylane-settings.php';
-            
-            // Initialisation des classes
-            if (class_exists('\WooPennylane\Admin\Settings')) {
-                $this->settings = new \WooPennylane\Admin\Settings();
+    /**
+     * Charge les fichiers de traduction
+     */
+    private function load_textdomain() {
+        load_plugin_textdomain(
+            'woo-pennylane',
+            false,
+            dirname(WOO_PENNYLANE_PLUGIN_BASENAME) . '/languages'
+        );
+    }
+
+    /**
+     * Charge les classes nécessaires
+     */
+    private function load_classes() {
+        // Chemins des fichiers
+        $files = array(
+            'includes/class-woo-pennylane-settings.php'
+        );
+
+        // Chargement des fichiers
+        foreach ($files as $file) {
+            $file_path = WOO_PENNYLANE_PLUGIN_DIR . $file;
+            if (file_exists($file_path)) {
+                require_once $file_path;
             }
-        } catch (\Exception $e) {
-            $this->log_error($e->getMessage());
+        }
+
+        // Initialisation des classes
+        if (class_exists('WooPennylane_Settings')) {
+            $this->settings = new WooPennylane_Settings();
         }
     }
 
+    /**
+     * Activation du plugin
+     */
     public function activate() {
         if (!current_user_can('activate_plugins')) {
             return;
         }
 
-        try {
-            // Vérification de WooCommerce
-            if (!class_exists('WooCommerce')) {
-                throw new \Exception(
-                    __('WooCommerce doit être installé et activé pour utiliser cette extension.', 'woo-pennylane')
-                );
-            }
-
-            // Création des tables
-            $this->create_tables();
-            
-            // Ajout des options par défaut
-            $this->add_default_options();
-
-            // Marquer l'activation pour afficher la notice de bienvenue
-            set_transient('woo_pennylane_activation', true, 30);
-
-        } catch (\Exception $e) {
-            deactivate_plugins(plugin_basename(WOO_PENNYLANE_PLUGIN_FILE));
+        // Vérifie WooCommerce
+        if (!class_exists('WooCommerce')) {
+            deactivate_plugins(WOO_PENNYLANE_PLUGIN_BASENAME);
             wp_die(
-                esc_html($e->getMessage()),
+                esc_html__('WooCommerce doit être installé et activé pour utiliser cette extension.', 'woo-pennylane'),
                 'Plugin Activation Error',
                 array('back_link' => true)
             );
         }
+
+        // Crée les tables
+        $this->create_tables();
+
+        // Ajoute les options par défaut
+        $this->add_default_options();
+
+        // Marque comme activé pour afficher la notice de bienvenue
+        set_transient('woo_pennylane_activation', true, 30);
+
+        // Flush les règles de réécriture
+        flush_rewrite_rules();
     }
 
+    /**
+     * Désactivation du plugin
+     */
     public function deactivate() {
         if (!current_user_can('activate_plugins')) {
             return;
@@ -140,6 +169,9 @@ class WooPennylane {
         flush_rewrite_rules();
     }
 
+    /**
+     * Création des tables de base de données
+     */
     private function create_tables() {
         global $wpdb;
         
@@ -160,6 +192,9 @@ class WooPennylane {
         dbDelta($sql);
     }
 
+    /**
+     * Ajout des options par défaut
+     */
     private function add_default_options() {
         $default_options = array(
             'woo_pennylane_api_key' => '',
@@ -171,50 +206,13 @@ class WooPennylane {
         );
 
         foreach ($default_options as $option_name => $default_value) {
-            if (get_option($option_name) === false) {
-                add_option($option_name, $default_value);
-            }
+            add_option($option_name, $default_value);
         }
     }
 
-    public function enqueue_admin_scripts($hook) {
-        if ('woocommerce_page_woo-pennylane-settings' !== $hook) {
-            return;
-        }
-
-        // CSS
-        wp_enqueue_style(
-            'woo-pennylane-admin',
-            WOO_PENNYLANE_PLUGIN_URL . 'assets/css/admin.css',
-            array(),
-            WOO_PENNYLANE_VERSION
-        );
-
-        // JavaScript
-        wp_enqueue_script(
-            'woo-pennylane-admin',
-            WOO_PENNYLANE_PLUGIN_URL . 'assets/js/admin.js',
-            array('jquery'),
-            WOO_PENNYLANE_VERSION,
-            true
-        );
-
-        // Paramètres localisés
-        wp_localize_script(
-            'woo-pennylane-admin',
-            'wooPennylaneParams',
-            array(
-                'ajaxUrl' => admin_url('admin-ajax.php'),
-                'nonce' => wp_create_nonce('woo_pennylane_nonce'),
-                'errorMessage' => __('Une erreur est survenue', 'woo-pennylane'),
-                'requiredFieldsMessage' => __('Tous les champs requis doivent être remplis', 'woo-pennylane'),
-                'connectionErrorMessage' => __('Erreur de connexion à l\'API', 'woo-pennylane'),
-                'hideText' => __('Masquer', 'woo-pennylane'),
-                'showText' => __('Afficher', 'woo-pennylane')
-            )
-        );
-    }
-
+    /**
+     * Affiche les notices d'administration
+     */
     public function admin_notices() {
         // Notice de bienvenue après activation
         if (get_transient('woo_pennylane_activation')) {
@@ -234,6 +232,9 @@ class WooPennylane {
         }
     }
 
+    /**
+     * Affiche la notice WooCommerce manquant
+     */
     public function woocommerce_missing_notice() {
         if (current_user_can('activate_plugins')) {
             ?>
@@ -248,17 +249,22 @@ class WooPennylane {
         }
     }
 
+    /**
+     * Logger les erreurs en mode debug
+     */
     private function log_error($message) {
         if (defined('WP_DEBUG') && WP_DEBUG) {
-            error_log('WooPennylane Error: ' . $message);
+            error_log('[WooPennylane] ' . $message);
         }
     }
 }
 
-// Fonction d'accès global au plugin
+/**
+ * Retourne l'instance unique du plugin
+ */
 function woo_pennylane() {
-    return WooPennylane::instance();
+    return WooPennylane::get_instance();
 }
 
-// Initialisation du plugin
-add_action('plugins_loaded', 'woo_pennylane', 10);
+// Démarrage du plugin
+woo_pennylane();
