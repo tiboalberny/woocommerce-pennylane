@@ -1,11 +1,11 @@
 <?php
 /**
  * Plugin Name: WooCommerce Pennylane Integration
- * Plugin URI: https://votre-site.com/woo-pennylane
+ * Plugin URI: https://lespetitschaudrons.fr
  * Description: Intégration entre WooCommerce et Pennylane pour la synchronisation des factures
  * Version: 1.0.0
  * Author: Tibo
- * Author URI: https://votre-site.com
+ * Author URI: https://hostophoto.fr
  * License: GPL v2 or later
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
  * Text Domain: woo-pennylane
