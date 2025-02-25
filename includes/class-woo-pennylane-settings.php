@@ -18,9 +18,13 @@ class WooPennylane_Settings {
         add_action('wp_ajax_woo_pennylane_sync_orders', array($this, 'sync_orders'));
         add_action('wp_ajax_woo_pennylane_analyze_customers', array($this, 'analyze_customers'));
         add_action('wp_ajax_woo_pennylane_sync_customers', array($this, 'sync_customers'));
+        
+        // Nouvelles actions AJAX pour les produits
+        add_action('wp_ajax_woo_pennylane_analyze_products', array($this, 'analyze_products'));
+        add_action('wp_ajax_woo_pennylane_sync_products', array($this, 'sync_products'));
+        add_action('wp_ajax_woo_pennylane_sync_single_product', array($this, 'sync_single_product'));
 
         error_log('WooPennylane: Constructeur de Settings initialisé');
-}
     }
 
     public function add_admin_menu() {
@@ -37,11 +41,16 @@ class WooPennylane_Settings {
     public function register_settings() {
         register_setting('woo_pennylane_settings', 'woo_pennylane_api_key');
         register_setting('woo_pennylane_settings', 'woo_pennylane_debug_mode');
+        register_setting('woo_pennylane_settings', 'woo_pennylane_auto_sync');
+        register_setting('woo_pennylane_settings', 'woo_pennylane_sync_status');
+        register_setting('woo_pennylane_settings', 'woo_pennylane_journal_code');
+        register_setting('woo_pennylane_settings', 'woo_pennylane_account_number');
+        register_setting('woo_pennylane_settings', 'woo_pennylane_auto_sync_products');
     }
 
     public function enqueue_admin_scripts($hook) {
-    if ('woocommerce_page_woo-pennylane-settings' !== $hook) {
-        return;
+        if ('woocommerce_page_woo-pennylane-settings' !== $hook) {
+            return;
         }
 
         wp_enqueue_style(
@@ -63,7 +72,15 @@ class WooPennylane_Settings {
         $debug_info = array(
             'ajaxUrl' => admin_url('admin-ajax.php'),
             'nonce' => wp_create_nonce('woo_pennylane_nonce'),
-            'debug' => true
+            'debug' => true,
+            'i18n' => array(
+                'syncing' => __('Synchronisation...', 'woo-pennylane'),
+                'synced' => __('Synchronisé', 'woo-pennylane'),
+                'pennylane_id' => __('ID Pennylane:', 'woo-pennylane'),
+                'last_synced' => __('Dernière synchronisation:', 'woo-pennylane'),
+                'sync_completed' => __('Synchronisation terminée', 'woo-pennylane'),
+                'sync_error' => __('Erreur de synchronisation', 'woo-pennylane')
+            )
         );
         
         wp_localize_script(
@@ -94,12 +111,18 @@ class WooPennylane_Settings {
                    class="nav-tab <?php echo $this->active_tab === 'customers' ? 'nav-tab-active' : ''; ?>">
                     <?php _e('Clients', 'woo-pennylane'); ?>
                 </a>
+                <a href="?page=woo-pennylane-settings&tab=products" 
+                   class="nav-tab <?php echo $this->active_tab === 'products' ? 'nav-tab-active' : ''; ?>">
+                    <?php _e('Produits', 'woo-pennylane'); ?>
+                </a>
             </nav>
             <?php
                 if ($this->active_tab === 'customers') {
                     include WOO_PENNYLANE_PLUGIN_DIR . 'templates/admin-customers.php';
                 } else if ($this->active_tab === 'sync') {
                     include WOO_PENNYLANE_PLUGIN_DIR . 'templates/admin-sync.php';
+                } else if ($this->active_tab === 'products') {
+                    include WOO_PENNYLANE_PLUGIN_DIR . 'templates/admin-products.php';
                 } else {
                     include WOO_PENNYLANE_PLUGIN_DIR . 'templates/admin-settings.php';
                 }
@@ -284,113 +307,265 @@ class WooPennylane_Settings {
             wp_send_json_error($e->getMessage());
         }
     }
+    
     /**
- * Analyse les clients WooCommerce
- */
-public function analyze_customers() {
-    check_ajax_referer('woo_pennylane_nonce', 'nonce');
+     * Analyse les clients WooCommerce
+     */
+    public function analyze_customers() {
+        check_ajax_referer('woo_pennylane_nonce', 'nonce');
 
-    if (!current_user_can('manage_woocommerce')) {
-        wp_send_json_error(__('Permission refusée', 'woo-pennylane'));
-    }
-
-    try {
-        // Requête pour compter les clients
-        $args = array(
-            'role' => 'customer',
-            'fields' => 'ID'
-        );
-
-        $customers = get_users($args);
-        $total = count($customers);
-
-        // Compte des clients déjà synchronisés
-        $synced = 0;
-        foreach ($customers as $customer_id) {
-            if (get_user_meta($customer_id, '_pennylane_synced', true) === 'yes') {
-                $synced++;
-            }
+        if (!current_user_can('manage_woocommerce')) {
+            wp_send_json_error(__('Permission refusée', 'woo-pennylane'));
         }
 
-        wp_send_json_success(array(
-            'total' => $total,
-            'synced' => $synced,
-            'to_sync' => $total - $synced
-        ));
+        try {
+            // Requête pour compter les clients
+            $args = array(
+                'role' => 'customer',
+                'fields' => 'ID'
+            );
 
-    } catch (Exception $e) {
-        wp_send_json_error($e->getMessage());
+            $customers = get_users($args);
+            $total = count($customers);
+
+            // Compte des clients déjà synchronisés
+            $synced = 0;
+            foreach ($customers as $customer_id) {
+                if (get_user_meta($customer_id, '_pennylane_synced', true) === 'yes') {
+                    $synced++;
+                }
+            }
+
+            wp_send_json_success(array(
+                'total' => $total,
+                'synced' => $synced,
+                'to_sync' => $total - $synced
+            ));
+
+        } catch (Exception $e) {
+            wp_send_json_error($e->getMessage());
+        }
     }
-}
 
-/**
- * Synchronise les clients vers Pennylane
- */
-public function sync_customers() {
-    check_ajax_referer('woo_pennylane_nonce', 'nonce');
+    /**
+     * Synchronise les clients vers Pennylane
+     */
+    public function sync_customers() {
+        check_ajax_referer('woo_pennylane_nonce', 'nonce');
 
-    if (!current_user_can('manage_woocommerce')) {
-        wp_send_json_error(__('Permission refusée', 'woo-pennylane'));
+        if (!current_user_can('manage_woocommerce')) {
+            wp_send_json_error(__('Permission refusée', 'woo-pennylane'));
+        }
+
+        $offset = isset($_POST['offset']) ? intval($_POST['offset']) : 0;
+        $batch_size = 10; // Nombre de clients à traiter par lot
+
+        try {
+            // Initialise le synchroniseur
+            require_once WOO_PENNYLANE_PLUGIN_DIR . 'includes/class-woo-pennylane-customer-sync.php';
+            $synchronizer = new WooPennylane_Customer_Sync();
+
+            // Récupération des clients pour ce lot
+            $args = array(
+                'role' => 'customer',
+                'fields' => 'ID',
+                'number' => $batch_size,
+                'offset' => $offset
+            );
+
+            $customers = get_users($args);
+            $results = array();
+            $processed = 0;
+
+            foreach ($customers as $customer_id) {
+                // Vérifie si le client n'est pas déjà synchronisé
+                if (get_user_meta($customer_id, '_pennylane_synced', true) !== 'yes') {
+                    try {
+                        $customer_data = new WC_Customer($customer_id);
+                        if ($customer_data && $customer_data->get_billing_email()) {
+                            $synchronizer->sync_customer($customer_id);
+                            $results[] = array(
+                                'status' => 'success',
+                                'message' => sprintf(
+                                    __('Client "%s" synchronisé avec succès', 'woo-pennylane'), 
+                                    $customer_data->get_billing_first_name() . ' ' . $customer_data->get_billing_last_name()
+                                )
+                            );
+                        } else {
+                            $results[] = array(
+                                'status' => 'error',
+                                'message' => sprintf(__('Client #%d ignoré - données incomplètes', 'woo-pennylane'), $customer_id)
+                            );
+                        }
+                    } catch (Exception $e) {
+                        $results[] = array(
+                            'status' => 'error',
+                            'message' => sprintf(__('Erreur pour le client #%d : %s', 'woo-pennylane'), $customer_id, $e->getMessage())
+                        );
+                    }
+                }
+                $processed++;
+            }
+
+            wp_send_json_success(array(
+                'processed' => $processed,
+                'results' => $results
+            ));
+
+        } catch (Exception $e) {
+            wp_send_json_error($e->getMessage());
+        }
     }
 
-    $offset = isset($_POST['offset']) ? intval($_POST['offset']) : 0;
-    $batch_size = 10; // Nombre de clients à traiter par lot
+    /**
+     * Analyse les produits WooCommerce
+     */
+    public function analyze_products() {
+        check_ajax_referer('woo_pennylane_nonce', 'nonce');
 
-    try {
-        // Initialise le synchroniseur
-        require_once WOO_PENNYLANE_PLUGIN_DIR . 'includes/class-woo-pennylane-customer-sync.php';
-        $synchronizer = new WooPennylane_Customer_Sync();
+        if (!current_user_can('manage_woocommerce')) {
+            wp_send_json_error(__('Permission refusée', 'woo-pennylane'));
+        }
 
-        // Récupération des clients pour ce lot
-        $args = array(
-            'role' => 'customer',
-            'fields' => 'ID',
-            'number' => $batch_size,
-            'offset' => $offset
-        );
+        try {
+            // Requête pour compter les produits
+            $args = array(
+                'status' => 'publish',
+                'limit' => -1,
+                'return' => 'ids',
+            );
 
-        $customers = get_users($args);
-        $results = array();
-        $processed = 0;
+            $products = wc_get_products($args);
+            $total = count($products);
 
-        foreach ($customers as $customer_id) {
-            // Vérifie si le client n'est pas déjà synchronisé
-            if (get_user_meta($customer_id, '_pennylane_synced', true) !== 'yes') {
-                try {
-                    $customer_data = new WC_Customer($customer_id);
-                    if ($customer_data && $customer_data->get_billing_email()) {
-                        $synchronizer->sync_customer($customer_id);
+            // Compte des produits déjà synchronisés
+            $synced = 0;
+            foreach ($products as $product_id) {
+                if (get_post_meta($product_id, '_pennylane_product_synced', true) === 'yes') {
+                    $synced++;
+                }
+            }
+
+            wp_send_json_success(array(
+                'total' => $total,
+                'synced' => $synced,
+                'to_sync' => $total - $synced
+            ));
+
+        } catch (Exception $e) {
+            wp_send_json_error($e->getMessage());
+        }
+    }
+
+    /**
+     * Synchronise les produits vers Pennylane
+     */
+    public function sync_products() {
+        check_ajax_referer('woo_pennylane_nonce', 'nonce');
+
+        if (!current_user_can('manage_woocommerce')) {
+            wp_send_json_error(__('Permission refusée', 'woo-pennylane'));
+        }
+
+        $offset = isset($_POST['offset']) ? intval($_POST['offset']) : 0;
+        $batch_size = 10; // Nombre de produits à traiter par lot
+
+        try {
+            // Initialise le synchroniseur
+            require_once WOO_PENNYLANE_PLUGIN_DIR . 'includes/class-woo-pennylane-product-sync.php';
+            $synchronizer = new WooPennylane_Product_Sync();
+
+            // Récupération des produits pour ce lot
+            $args = array(
+                'status' => 'publish',
+                'limit' => $batch_size,
+                'offset' => $offset,
+                'return' => 'ids',
+            );
+
+            $products = wc_get_products($args);
+            $results = array();
+            $processed = 0;
+
+            foreach ($products as $product_id) {
+                // Vérifie si le produit n'est pas déjà synchronisé ou exclu
+                if (get_post_meta($product_id, '_pennylane_product_synced', true) !== 'yes' && 
+                    get_post_meta($product_id, '_pennylane_product_exclude', true) !== 'yes') {
+                    try {
+                        $product = wc_get_product($product_id);
+                        $synchronizer->sync_product($product_id);
                         $results[] = array(
                             'status' => 'success',
                             'message' => sprintf(
-                                __('Client "%s" synchronisé avec succès', 'woo-pennylane'), 
-                                $customer_data->get_billing_first_name() . ' ' . $customer_data->get_billing_last_name()
+                                __('Produit "%s" synchronisé avec succès', 'woo-pennylane'), 
+                                $product->get_name()
                             )
                         );
-                    } else {
+                    } catch (Exception $e) {
                         $results[] = array(
                             'status' => 'error',
-                            'message' => sprintf(__('Client #%d ignoré - données incomplètes', 'woo-pennylane'), $customer_id)
+                            'message' => sprintf(__('Erreur pour le produit #%d : %s', 'woo-pennylane'), $product_id, $e->getMessage())
                         );
                     }
-                } catch (Exception $e) {
+                } else {
                     $results[] = array(
-                        'status' => 'error',
-                        'message' => sprintf(__('Erreur pour le client #%d : %s', 'woo-pennylane'), $customer_id, $e->getMessage())
+                        'status' => 'skipped',
+                        'message' => sprintf(__('Produit #%d ignoré - déjà synchronisé ou exclu', 'woo-pennylane'), $product_id)
                     );
                 }
+                $processed++;
             }
-            $processed++;
+
+            wp_send_json_success(array(
+                'processed' => $processed,
+                'results' => $results
+            ));
+
+        } catch (Exception $e) {
+            wp_send_json_error($e->getMessage());
+        }
+    }
+
+    /**
+     * Synchronise un produit individuel via AJAX
+     */
+    public function sync_single_product() {
+        check_ajax_referer('woo_pennylane_nonce', 'nonce');
+
+        if (!current_user_can('edit_products')) {
+            wp_send_json_error(__('Permission refusée', 'woo-pennylane'));
         }
 
-        wp_send_json_success(array(
-            'processed' => $processed,
-            'results' => $results
-        ));
+        $product_id = isset($_POST['product_id']) ? intval($_POST['product_id']) : 0;
 
-    } catch (Exception $e) {
-        wp_send_json_error($e->getMessage());
+        if (!$product_id) {
+            wp_send_json_error(__('ID de produit invalide', 'woo-pennylane'));
+        }
+
+        try {
+            // Initialise le synchroniseur
+            require_once WOO_PENNYLANE_PLUGIN_DIR . 'includes/class-woo-pennylane-product-sync.php';
+            $synchronizer = new WooPennylane_Product_Sync();
+
+            // Synchronise le produit
+            $synchronizer->sync_product($product_id);
+
+            // Récupère les informations mises à jour
+            $product = wc_get_product($product_id);
+            $pennylane_id = get_post_meta($product_id, '_pennylane_product_id', true);
+            $last_sync = get_post_meta($product_id, '_pennylane_product_last_sync', true);
+
+            wp_send_json_success(array(
+                'message' => sprintf(__('Produit "%s" synchronisé avec succès', 'woo-pennylane'), $product->get_name()),
+                'pennylane_id' => $pennylane_id,
+                'last_sync' => $last_sync,
+                'human_time' => human_time_diff(strtotime($last_sync), current_time('timestamp'))
+            ));
+
+        } catch (Exception $e) {
+            wp_send_json_error(array(
+                'message' => $e->getMessage()
+            ));
+        }
     }
-}
-
 }
