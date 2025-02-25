@@ -3,7 +3,7 @@
  * Plugin Name: WooCommerce Pennylane Integration
  * Plugin URI: https://lespetitschaudrons.fr
  * Description: Intégration entre WooCommerce et Pennylane pour la synchronisation des factures
- * Version: 1.1.0
+ * Version: 1.2.0
  * Author: Tibo
  * Author URI: https://hostophoto.fr
  * License: GPL v2 or later
@@ -22,7 +22,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Définition des constantes
-define('WOO_PENNYLANE_VERSION', '1.1.0');
+define('WOO_PENNYLANE_VERSION', '1.2.0');
 define('WOO_PENNYLANE_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('WOO_PENNYLANE_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('WOO_PENNYLANE_PLUGIN_BASENAME', plugin_basename(__FILE__));
@@ -103,36 +103,52 @@ class WooPennylane {
             dirname(WOO_PENNYLANE_PLUGIN_BASENAME) . '/languages'
         );
     }
-    private function includes() {
-    include_once WOO_PENNYLANE_PLUGIN_DIR . 'includes/class-woo-pennylane-settings.php';
-    include_once WOO_PENNYLANE_PLUGIN_DIR . 'includes/class-woo-pennylane-synchronizer.php';
-    include_once WOO_PENNYLANE_PLUGIN_DIR . 'includes/class-woo-pennylane-customer-sync.php';
-}
 
     /**
      * Charge les classes nécessaires
      */
     private function load_classes() {
-    // Chemins des fichiers
-    $files = array(
-        'includes/class-woo-pennylane-settings.php',
-        'includes/class-woo-pennylane-synchronizer.php',
-        'includes/class-woo-pennylane-customer-sync.php'
-    );
-    
-    // Chargement des fichiers
-    foreach ($files as $file) {
-        $file_path = WOO_PENNYLANE_PLUGIN_DIR . $file;
-        if (file_exists($file_path)) {
-            require_once $file_path;
+        // Chemins des fichiers
+        $files = array(
+            'includes/class-woo-pennylane-settings.php',
+            'includes/class-woo-pennylane-synchronizer.php',
+            'includes/class-woo-pennylane-customer-sync.php',
+            'includes/class-woo-pennylane-product-sync.php'
+        );
+        
+        // Chargement des fichiers
+        foreach ($files as $file) {
+            $file_path = WOO_PENNYLANE_PLUGIN_DIR . $file;
+            if (file_exists($file_path)) {
+                require_once $file_path;
+            }
+        }
+        
+        // Initialisation des classes
+        if (class_exists('WooPennylane_Settings')) {
+            $this->settings = new WooPennylane_Settings();
+        }
+
+        // Initialisation de la synchronisation des produits
+        if (class_exists('WooPennylane_Product_Sync')) {
+            $product_sync = new WooPennylane_Product_Sync();
+            
+            // Hooks pour les actions de produits
+            add_action('add_meta_boxes', array($product_sync, 'add_product_metabox'));
+            add_action('save_post_product', array($product_sync, 'save_product_metabox'));
+            add_action('woocommerce_update_product', array($product_sync, 'maybe_sync_on_update'));
+            add_action('woocommerce_create_product', array($product_sync, 'maybe_sync_on_update'));
+            
+            // Hooks pour la liste des produits
+            add_filter('manage_edit-product_columns', array($product_sync, 'add_product_list_column'));
+            add_action('manage_product_posts_custom_column', array($product_sync, 'render_product_list_column'), 10, 2);
+            
+            // Hooks pour les actions en masse
+            add_filter('bulk_actions-edit-product', array($product_sync, 'add_bulk_actions'));
+            add_filter('handle_bulk_actions-edit-product', array($product_sync, 'handle_bulk_actions'), 10, 3);
+            add_action('admin_notices', array($product_sync, 'bulk_action_admin_notice'));
         }
     }
-    
-    // Initialisation des classes
-    if (class_exists('WooPennylane_Settings')) {
-        $this->settings = new WooPennylane_Settings();
-    }
-}
 
     /**
      * Activation du plugin
@@ -209,7 +225,8 @@ class WooPennylane {
             'woo_pennylane_account_number' => '',
             'woo_pennylane_debug_mode' => 'no',
             'woo_pennylane_auto_sync' => 'yes',
-            'woo_pennylane_sync_status' => array('completed')
+            'woo_pennylane_sync_status' => array('completed'),
+            'woo_pennylane_auto_sync_products' => 'no'
         );
 
         foreach ($default_options as $option_name => $default_value) {

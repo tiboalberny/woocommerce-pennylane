@@ -18,6 +18,9 @@ class WooPennylane_Settings {
         add_action('wp_ajax_woo_pennylane_sync_orders', array($this, 'sync_orders'));
         add_action('wp_ajax_woo_pennylane_analyze_customers', array($this, 'analyze_customers'));
         add_action('wp_ajax_woo_pennylane_sync_customers', array($this, 'sync_customers'));
+
+        error_log('WooPennylane: Constructeur de Settings initialisé');
+}
     }
 
     public function add_admin_menu() {

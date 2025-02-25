@@ -318,4 +318,238 @@ jQuery(document).ready(function($) {
         // Démarrer la synchronisation
         syncNextCustomerBatch();
     });
+     // Analyse des produits
+    $('#analyze-products').on('click', function(e) {
+        e.preventDefault();
+        
+        console.log("Bouton d'analyse des produits cliqué");
+        
+        const button = $(this);
+        
+        button.prop('disabled', true);
+        button.after('<span class="spinner is-active"></span>');
+
+        $.ajax({
+            url: wooPennylaneParams.ajaxUrl,
+            type: 'POST',
+            data: {
+                action: 'woo_pennylane_analyze_products',
+                nonce: wooPennylaneParams.nonce
+            },
+            success: function(response) {
+                console.log("Réponse d'analyse des produits:", response);
+                button.next('.spinner').remove();
+                
+                if (response.success) {
+                    const data = response.data;
+                    
+                    $('#products-found').text(data.total);
+                    $('#products-synced').text(data.synced);
+                    $('#products-to-sync').text(data.to_sync);
+                    
+                    $('#products-results').show();
+                    $('#start-product-sync').prop('disabled', data.to_sync === 0);
+                } else {
+                    alert(response.data);
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error("Erreur AJAX:", status, error);
+                button.next('.spinner').remove();
+                alert('Erreur de communication avec le serveur');
+            },
+            complete: function() {
+                button.prop('disabled', false);
+            }
+        });
+    });
+
+    // Synchronisation des produits
+    $('#start-product-sync').on('click', function(e) {
+        e.preventDefault();
+        
+        console.log("Bouton de synchronisation des produits cliqué");
+        
+        const button = $(this);
+        
+        button.prop('disabled', true);
+        $('#product-sync-progress').show();
+        
+        let processedProducts = 0;
+        const totalProducts = parseInt($('#products-to-sync').text(), 10);
+
+        function updateProductProgress(current, total) {
+            const percentage = Math.round((current / total) * 100);
+            $('#product-sync-progress .progress-bar-inner').css('width', percentage + '%');
+            $('#product-sync-progress .progress-text').text(percentage + '%');
+        }
+
+        function addProductLogEntry(message, type) {
+            const entry = $('<div class="log-entry ' + type + '">' + message + '</div>');
+            $('#product-sync-log-content').prepend(entry);
+        }
+
+        function syncNextProductBatch() {
+            $.ajax({
+                url: wooPennylaneParams.ajaxUrl,
+                type: 'POST',
+                data: {
+                    action: 'woo_pennylane_sync_products',
+                    nonce: wooPennylaneParams.nonce,
+                    offset: processedProducts
+                },
+                success: function(response) {
+                    console.log("Réponse de synchronisation des produits:", response);
+                    if (response.success) {
+                        processedProducts += response.data.processed;
+                        
+                        response.data.results.forEach(function(result) {
+                            addProductLogEntry(result.message, result.status);
+                        });
+                        
+                        updateProductProgress(processedProducts, totalProducts);
+                        
+                        if (processedProducts < totalProducts) {
+                            syncNextProductBatch();
+                        } else {
+                            button.prop('disabled', false);
+                            addProductLogEntry('Synchronisation des produits terminée', 'success');
+                        }
+                    } else {
+                        button.prop('disabled', false);
+                        addProductLogEntry('Erreur : ' + response.data, 'error');
+                    }
+                },
+                error: function(xhr, status, error) {
+                    console.error("Erreur AJAX:", status, error);
+                    button.prop('disabled', false);
+                    addProductLogEntry('Erreur de communication avec le serveur', 'error');
+                }
+            });
+        }
+
+        // Démarrer la synchronisation
+        syncNextProductBatch();
+    });
+
+    // Synchronisation d'un produit individuel (depuis la liste ou la métabox)
+    $(document).on('click', '.pennylane-sync-product, #pennylane-sync-product', function(e) {
+        e.preventDefault();
+        
+        const button = $(this);
+        const productId = button.data('product-id');
+        
+        if (!productId) {
+            return;
+        }
+        
+        button.prop('disabled', true);
+        
+        // Ajouter un spinner
+        if (button.next('.spinner').length === 0) {
+            button.after('<span class="spinner is-active"></span>');
+        } else {
+            button.next('.spinner').addClass('is-active');
+        }
+        
+        $.ajax({
+            url: wooPennylaneParams.ajaxUrl,
+            type: 'POST',
+            data: {
+                action: 'woo_pennylane_sync_single_product',
+                nonce: wooPennylaneParams.nonce,
+                product_id: productId
+            },
+            success: function(response) {
+                button.next('.spinner').removeClass('is-active');
+                
+                if (response.success) {
+                    // Si nous sommes dans la métabox
+                    if (button.attr('id') === 'pennylane-sync-product') {
+                        const container = button.closest('.pennylane-product-sync-box');
+                        container.find('.pennylane-not-synced').removeClass('pennylane-not-synced').addClass('pennylane-synced').text('Synchronisé');
+                        container.find('.pennylane-sync-error').remove();
+                        
+                        // Mise à jour des informations
+                        if (container.find('p:contains("ID Pennylane")').length === 0) {
+                            container.prepend('<p>' + wooPennylaneParams.i18n.pennylane_id + ': <strong>' + response.data.pennylane_id + '</strong></p>');
+                        }
+                        
+                        // Ajouter un message de succès temporaire
+                        button.after('<div class="notice notice-success inline"><p>' + response.data.message + '</p></div>');
+                        setTimeout(function() {
+                            button.next('.notice').fadeOut(function() {
+                                $(this).remove();
+                            });
+                        }, 3000);
+                    } 
+                    // Si nous sommes dans la liste des produits
+                    else {
+                        const cell = button.parent();
+                        cell.find('.dashicons').remove();
+                        cell.prepend('<span class="dashicons dashicons-yes" title="' + wooPennylaneParams.i18n.synced + '"></span> ');
+                        
+                        // Ajouter un message de succès temporaire
+                        button.after('<span class="sync-success">✓</span>');
+                        setTimeout(function() {
+                            button.next('.sync-success').fadeOut(function() {
+                                $(this).remove();
+                            });
+                        }, 2000);
+                    }
+                } else {
+                    // Afficher l'erreur
+                    if (button.attr('id') === 'pennylane-sync-product') {
+                        button.after('<div class="notice notice-error inline"><p>' + response.data.message + '</p></div>');
+                        setTimeout(function() {
+                            button.next('.notice').fadeOut(function() {
+                                $(this).remove();
+                            });
+                        }, 3000);
+                    } else {
+                        button.after('<span class="sync-error">✗</span>');
+                        setTimeout(function() {
+                            button.next('.sync-error').fadeOut(function() {
+                                $(this).remove();
+                            });
+                        }, 2000);
+                    }
+                }
+            },
+            error: function() {
+                button.next('.spinner').removeClass('is-active');
+                alert('Erreur de communication avec le serveur');
+            },
+            complete: function() {
+                button.prop('disabled', false);
+            }
+        });
+    });
+
+/**
+ * Ajoutez également les traductions nécessaires dans le script de localisation
+ * Trouvez ce bloc dans la fonction enqueue_admin_scripts de class-woo-pennylane-settings.php:
+ */
+$debug_info = array(
+    'ajaxUrl' => admin_url('admin-ajax.php'),
+    'nonce' => wp_create_nonce('woo_pennylane_nonce'),
+    'debug' => true
+);
+
+/**
+ * Et modifiez-le pour ajouter les traductions:
+ */
+$debug_info = array(
+    'ajaxUrl' => admin_url('admin-ajax.php'),
+    'nonce' => wp_create_nonce('woo_pennylane_nonce'),
+    'debug' => true,
+    'i18n' => array(
+        'syncing' => __('Synchronisation...', 'woo-pennylane'),
+        'synced' => __('Synchronisé', 'woo-pennylane'),
+        'pennylane_id' => __('ID Pennylane:', 'woo-pennylane'),
+        'last_synced' => __('Dernière synchronisation:', 'woo-pennylane'),
+        'sync_completed' => __('Synchronisation terminée', 'woo-pennylane'),
+        'sync_error' => __('Erreur de synchronisation', 'woo-pennylane')
+    )
+);
 });
