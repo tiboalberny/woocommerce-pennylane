@@ -103,29 +103,36 @@ class WooPennylane {
             dirname(WOO_PENNYLANE_PLUGIN_BASENAME) . '/languages'
         );
     }
+    private function includes() {
+    include_once WOO_PENNYLANE_PLUGIN_DIR . 'includes/class-woo-pennylane-settings.php';
+    include_once WOO_PENNYLANE_PLUGIN_DIR . 'includes/class-woo-pennylane-synchronizer.php';
+    include_once WOO_PENNYLANE_PLUGIN_DIR . 'includes/class-woo-pennylane-customer-sync.php';
+}
 
     /**
      * Charge les classes nécessaires
      */
     private function load_classes() {
-        // Chemins des fichiers
-        $files = array(
-            'includes/class-woo-pennylane-settings.php'
-        );
-
-        // Chargement des fichiers
-        foreach ($files as $file) {
-            $file_path = WOO_PENNYLANE_PLUGIN_DIR . $file;
-            if (file_exists($file_path)) {
-                require_once $file_path;
-            }
-        }
-
-        // Initialisation des classes
-        if (class_exists('WooPennylane_Settings')) {
-            $this->settings = new WooPennylane_Settings();
+    // Chemins des fichiers
+    $files = array(
+        'includes/class-woo-pennylane-settings.php',
+        'includes/class-woo-pennylane-synchronizer.php',
+        'includes/class-woo-pennylane-customer-sync.php'
+    );
+    
+    // Chargement des fichiers
+    foreach ($files as $file) {
+        $file_path = WOO_PENNYLANE_PLUGIN_DIR . $file;
+        if (file_exists($file_path)) {
+            require_once $file_path;
         }
     }
+    
+    // Initialisation des classes
+    if (class_exists('WooPennylane_Settings')) {
+        $this->settings = new WooPennylane_Settings();
+    }
+}
 
     /**
      * Activation du plugin

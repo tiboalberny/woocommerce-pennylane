@@ -16,6 +16,8 @@ class WooPennylane_Settings {
         add_action('wp_ajax_woo_pennylane_test_connection', array($this, 'test_api_connection'));
         add_action('wp_ajax_woo_pennylane_analyze_orders', array($this, 'analyze_orders'));
         add_action('wp_ajax_woo_pennylane_sync_orders', array($this, 'sync_orders'));
+        add_action('wp_ajax_woo_pennylane_analyze_customers', array($this, 'analyze_customers'));
+        add_action('wp_ajax_woo_pennylane_sync_customers', array($this, 'sync_customers'));
     }
 
     public function add_admin_menu() {
@@ -35,8 +37,8 @@ class WooPennylane_Settings {
     }
 
     public function enqueue_admin_scripts($hook) {
-        if ('woocommerce_page_woo-pennylane-settings' !== $hook) {
-            return;
+    if ('woocommerce_page_woo-pennylane-settings' !== $hook) {
+        return;
         }
 
         wp_enqueue_style(
@@ -54,14 +56,21 @@ class WooPennylane_Settings {
             true
         );
 
+        // Ajoutez ceci pour déboguer
+        $debug_info = array(
+            'ajaxUrl' => admin_url('admin-ajax.php'),
+            'nonce' => wp_create_nonce('woo_pennylane_nonce'),
+            'debug' => true
+        );
+        
         wp_localize_script(
             'woo-pennylane-admin',
             'wooPennylaneParams',
-            array(
-                'ajaxUrl' => admin_url('admin-ajax.php'),
-                'nonce' => wp_create_nonce('woo_pennylane_nonce')
-            )
+            $debug_info
         );
+        
+        // Debug dans la console
+        echo '<script>console.log("WooPennylane: Paramètres", ' . json_encode($debug_info) . ');</script>';
     }
 
     public function render_admin_page() {
@@ -69,7 +78,6 @@ class WooPennylane_Settings {
         ?>
         <div class="wrap">
             <h1><?php echo esc_html(get_admin_page_title()); ?></h1>
-
             <nav class="nav-tab-wrapper">
                 <a href="?page=woo-pennylane-settings&tab=settings" 
                    class="nav-tab <?php echo $this->active_tab === 'settings' ? 'nav-tab-active' : ''; ?>">
@@ -79,14 +87,19 @@ class WooPennylane_Settings {
                    class="nav-tab <?php echo $this->active_tab === 'sync' ? 'nav-tab-active' : ''; ?>">
                     <?php _e('Synchronisation', 'woo-pennylane'); ?>
                 </a>
+                <a href="?page=woo-pennylane-settings&tab=customers" 
+                   class="nav-tab <?php echo $this->active_tab === 'customers' ? 'nav-tab-active' : ''; ?>">
+                    <?php _e('Clients', 'woo-pennylane'); ?>
+                </a>
             </nav>
-
             <?php
-            if ($this->active_tab === 'sync') {
-                include WOO_PENNYLANE_PLUGIN_DIR . 'templates/admin-sync.php';
-            } else {
-                include WOO_PENNYLANE_PLUGIN_DIR . 'templates/admin-settings.php';
-            }
+                if ($this->active_tab === 'customers') {
+                    include WOO_PENNYLANE_PLUGIN_DIR . 'templates/admin-customers.php';
+                } else if ($this->active_tab === 'sync') {
+                    include WOO_PENNYLANE_PLUGIN_DIR . 'templates/admin-sync.php';
+                } else {
+                    include WOO_PENNYLANE_PLUGIN_DIR . 'templates/admin-settings.php';
+                }
             ?>
         </div>
         <?php
@@ -268,4 +281,113 @@ class WooPennylane_Settings {
             wp_send_json_error($e->getMessage());
         }
     }
+    /**
+ * Analyse les clients WooCommerce
+ */
+public function analyze_customers() {
+    check_ajax_referer('woo_pennylane_nonce', 'nonce');
+
+    if (!current_user_can('manage_woocommerce')) {
+        wp_send_json_error(__('Permission refusée', 'woo-pennylane'));
+    }
+
+    try {
+        // Requête pour compter les clients
+        $args = array(
+            'role' => 'customer',
+            'fields' => 'ID'
+        );
+
+        $customers = get_users($args);
+        $total = count($customers);
+
+        // Compte des clients déjà synchronisés
+        $synced = 0;
+        foreach ($customers as $customer_id) {
+            if (get_user_meta($customer_id, '_pennylane_synced', true) === 'yes') {
+                $synced++;
+            }
+        }
+
+        wp_send_json_success(array(
+            'total' => $total,
+            'synced' => $synced,
+            'to_sync' => $total - $synced
+        ));
+
+    } catch (Exception $e) {
+        wp_send_json_error($e->getMessage());
+    }
+}
+
+/**
+ * Synchronise les clients vers Pennylane
+ */
+public function sync_customers() {
+    check_ajax_referer('woo_pennylane_nonce', 'nonce');
+
+    if (!current_user_can('manage_woocommerce')) {
+        wp_send_json_error(__('Permission refusée', 'woo-pennylane'));
+    }
+
+    $offset = isset($_POST['offset']) ? intval($_POST['offset']) : 0;
+    $batch_size = 10; // Nombre de clients à traiter par lot
+
+    try {
+        // Initialise le synchroniseur
+        require_once WOO_PENNYLANE_PLUGIN_DIR . 'includes/class-woo-pennylane-customer-sync.php';
+        $synchronizer = new WooPennylane_Customer_Sync();
+
+        // Récupération des clients pour ce lot
+        $args = array(
+            'role' => 'customer',
+            'fields' => 'ID',
+            'number' => $batch_size,
+            'offset' => $offset
+        );
+
+        $customers = get_users($args);
+        $results = array();
+        $processed = 0;
+
+        foreach ($customers as $customer_id) {
+            // Vérifie si le client n'est pas déjà synchronisé
+            if (get_user_meta($customer_id, '_pennylane_synced', true) !== 'yes') {
+                try {
+                    $customer_data = new WC_Customer($customer_id);
+                    if ($customer_data && $customer_data->get_billing_email()) {
+                        $synchronizer->sync_customer($customer_id);
+                        $results[] = array(
+                            'status' => 'success',
+                            'message' => sprintf(
+                                __('Client "%s" synchronisé avec succès', 'woo-pennylane'), 
+                                $customer_data->get_billing_first_name() . ' ' . $customer_data->get_billing_last_name()
+                            )
+                        );
+                    } else {
+                        $results[] = array(
+                            'status' => 'error',
+                            'message' => sprintf(__('Client #%d ignoré - données incomplètes', 'woo-pennylane'), $customer_id)
+                        );
+                    }
+                } catch (Exception $e) {
+                    $results[] = array(
+                        'status' => 'error',
+                        'message' => sprintf(__('Erreur pour le client #%d : %s', 'woo-pennylane'), $customer_id, $e->getMessage())
+                    );
+                }
+            }
+            $processed++;
+        }
+
+        wp_send_json_success(array(
+            'processed' => $processed,
+            'results' => $results
+        ));
+
+    } catch (Exception $e) {
+        wp_send_json_error($e->getMessage());
+    }
+}
+
 }
