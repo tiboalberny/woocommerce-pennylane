@@ -318,7 +318,8 @@ jQuery(document).ready(function($) {
         // Démarrer la synchronisation
         syncNextCustomerBatch();
     });
-     // Analyse des produits
+
+    // Analyse des produits
     $('#analyze-products').on('click', function(e) {
         e.preventDefault();
         
@@ -525,31 +526,4 @@ jQuery(document).ready(function($) {
             }
         });
     });
-
-/**
- * Ajoutez également les traductions nécessaires dans le script de localisation
- * Trouvez ce bloc dans la fonction enqueue_admin_scripts de class-woo-pennylane-settings.php:
- */
-$debug_info = array(
-    'ajaxUrl' => admin_url('admin-ajax.php'),
-    'nonce' => wp_create_nonce('woo_pennylane_nonce'),
-    'debug' => true
-);
-
-/**
- * Et modifiez-le pour ajouter les traductions:
- */
-$debug_info = array(
-    'ajaxUrl' => admin_url('admin-ajax.php'),
-    'nonce' => wp_create_nonce('woo_pennylane_nonce'),
-    'debug' => true,
-    'i18n' => array(
-        'syncing' => __('Synchronisation...', 'woo-pennylane'),
-        'synced' => __('Synchronisé', 'woo-pennylane'),
-        'pennylane_id' => __('ID Pennylane:', 'woo-pennylane'),
-        'last_synced' => __('Dernière synchronisation:', 'woo-pennylane'),
-        'sync_completed' => __('Synchronisation terminée', 'woo-pennylane'),
-        'sync_error' => __('Erreur de synchronisation', 'woo-pennylane')
-    )
-);
 });
