@@ -226,7 +226,8 @@ class WooPennylane {
             'woo_pennylane_debug_mode' => 'no',
             'woo_pennylane_auto_sync' => 'yes',
             'woo_pennylane_sync_status' => array('completed'),
-            'woo_pennylane_auto_sync_products' => 'no'
+            'woo_pennylane_auto_sync_products' => 'no',
+            'woo_pennylane_product_ledger_account' => '707' // Compte de vente de marchandises par défaut
         );
 
         foreach ($default_options as $option_name => $default_value) {
@@ -276,7 +277,7 @@ class WooPennylane {
     /**
      * Logger les erreurs en mode debug
      */
-    private function log_error($message) {
+    public function log_error($message) {
         if (defined('WP_DEBUG') && WP_DEBUG) {
             error_log('[WooPennylane] ' . $message);
         }

@@ -46,6 +46,7 @@ class WooPennylane_Settings {
         register_setting('woo_pennylane_settings', 'woo_pennylane_journal_code');
         register_setting('woo_pennylane_settings', 'woo_pennylane_account_number');
         register_setting('woo_pennylane_settings', 'woo_pennylane_auto_sync_products');
+        register_setting('woo_pennylane_settings', 'woo_pennylane_product_ledger_account');
     }
 
     public function enqueue_admin_scripts($hook) {

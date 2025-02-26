@@ -89,16 +89,20 @@ class WooPennylane_Product_Sync {
      * @throws Exception Si des champs obligatoires sont manquants
      */
     private function validate_product_data($data) {
-        if (empty($data['name'])) {
+        if (empty($data['label'])) {
             throw new Exception(__('Nom du produit manquant', 'woo-pennylane'));
         }
         
-        if (empty($data['reference'])) {
-            throw new Exception(__('Référence/SKU du produit manquante', 'woo-pennylane'));
+        if (empty($data['external_reference'])) {
+            throw new Exception(__('Référence externe manquante', 'woo-pennylane'));
         }
         
-        if (!isset($data['unit_price'])) {
-            throw new Exception(__('Prix unitaire manquant', 'woo-pennylane'));
+        if (!isset($data['price_before_tax'])) {
+            throw new Exception(__('Prix HT manquant', 'woo-pennylane'));
+        }
+        
+        if (empty($data['vat_rate'])) {
+            throw new Exception(__('Taux de TVA manquant', 'woo-pennylane'));
         }
     }
 
@@ -109,64 +113,54 @@ class WooPennylane_Product_Sync {
      * @return array Données formatées pour l'API Pennylane
      */
     private function prepare_product_data($product) {
-        // Données de base du produit
+        // Récupération du prix HT
+        $price_before_tax = (float) $product->get_regular_price();
+        
+        // Récupération du taux de TVA
+        $vat_rate = $this->get_product_tax_rate($product);
+        $vat_rate_formatted = $this->format_vat_rate($vat_rate); // "FR_200" pour 20%
+        
+        // Calcul du prix TTC si disponible, sinon calculé
+        $price = wc_get_price_including_tax($product);
+        
+        // Préparation des données selon le format requis
         $product_data = array(
-            'name' => $product->get_name(),
-            'reference' => $product->get_sku() ? $product->get_sku() : 'WC-' . $product->get_id(),
+            'label' => $product->get_name(),
             'description' => $product->get_description(),
-            'unit_price' => (float) $product->get_regular_price(),
-            'type' => $this->get_product_type($product),
+            'external_reference' => (string) $product->get_id(), // ID WooCommerce comme référence externe
+            'price_before_tax' => $price_before_tax,
+            'vat_rate' => $vat_rate_formatted,
+            'price' => $price,
+            'unit' => 'piece', // Par défaut, à adapter selon vos besoins
+            'currency' => get_woocommerce_currency(),
+            'reference' => $product->get_sku() ? $product->get_sku() : 'WC-' . $product->get_id()
         );
-
-        // Ajoute le prix de vente s'il est défini
-        if ($product->is_on_sale()) {
-            $product_data['sale_price'] = (float) $product->get_sale_price();
+        
+        // Ajout du compte comptable si configuré
+        $ledger_account_id = get_option('woo_pennylane_product_ledger_account', 0);
+        if ($ledger_account_id) {
+            $product_data['ledger_account'] = array(
+                'id' => (int) $ledger_account_id
+            );
         }
-
-        // Ajoute les informations de stock si disponibles
-        if ($product->managing_stock()) {
-            $product_data['stock_quantity'] = $product->get_stock_quantity();
-            $product_data['stock_status'] = $product->get_stock_status();
-        }
-
-        // Ajoute les catégories
-        $categories = array();
-        $terms = get_the_terms($product->get_id(), 'product_cat');
-        if ($terms && !is_wp_error($terms)) {
-            foreach ($terms as $term) {
-                $categories[] = $term->name;
-            }
-        }
-        $product_data['categories'] = $categories;
-
-        // Ajoute les informations de TVA
-        $tax_status = $product->get_tax_status();
-        if ($tax_status === 'taxable') {
-            $product_data['vat_rate'] = $this->get_product_tax_rate($product);
-        }
-
-        // Traitement spécifique pour les produits variables
-        if ($product->is_type('variable')) {
-            $variations = array();
-            $product_variations = $product->get_available_variations();
-            
-            foreach ($product_variations as $variation_data) {
-                $variation_id = $variation_data['variation_id'];
-                $variation = wc_get_product($variation_id);
-                
-                $variations[] = array(
-                    'id' => $variation_id,
-                    'name' => $variation->get_name(),
-                    'reference' => $variation->get_sku() ? $variation->get_sku() : 'WC-' . $variation_id,
-                    'unit_price' => (float) $variation->get_regular_price(),
-                    'attributes' => $this->get_variation_attributes($variation)
-                );
-            }
-            
-            $product_data['variations'] = $variations;
-        }
-
+        
         return apply_filters('woo_pennylane_product_data', $product_data, $product);
+    }
+
+    /**
+     * Formate le taux de TVA au format attendu par Pennylane
+     * 
+     * @param float $rate Taux de TVA (ex: 20.0)
+     * @return string Format Pennylane (ex: "FR_200")
+     */
+    private function format_vat_rate($rate) {
+        // Par défaut, utiliser la France comme pays de TVA
+        $country = 'FR';
+        
+        // Conversion du taux (ex: 20.0 -> 200)
+        $rate_formatted = (int) ($rate * 10);
+        
+        return $country . '_' . $rate_formatted;
     }
 
     /**

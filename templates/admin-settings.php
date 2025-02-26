@@ -106,6 +106,25 @@ if (!current_user_can('manage_woocommerce')) {
                     </td>
                 </tr>
 
+                <tr>
+                    <th scope="row">
+                        <label for="woo_pennylane_product_ledger_account">
+                            <?php _e('Compte comptable des produits', 'woo-pennylane'); ?>
+                            <span class="required">*</span>
+                        </label>
+                    </th>
+                    <td>
+                        <input type="text" 
+                               id="woo_pennylane_product_ledger_account" 
+                               name="woo_pennylane_product_ledger_account"
+                               value="<?php echo esc_attr(get_option('woo_pennylane_product_ledger_account', '707')); ?>" 
+                               class="regular-text">
+                        <p class="description">
+                            <?php _e('Numéro de compte comptable pour les produits dans Pennylane', 'woo-pennylane'); ?>
+                        </p>
+                    </td>
+                </tr>
+
                 <!-- Section Synchronisation -->
                 <tr>
                     <th scope="row" colspan="2">
@@ -133,11 +152,33 @@ if (!current_user_can('manage_woocommerce')) {
 
                 <tr>
                     <th scope="row">
+                        <?php _e('Synchronisation Produits', 'woo-pennylane'); ?>
+                    </th>
+                    <td>
+                        <label>
+                            <input type="checkbox" 
+                                   name="woo_pennylane_auto_sync_products" 
+                                   value="yes" 
+                                   <?php checked(get_option('woo_pennylane_auto_sync_products'), 'yes'); ?>>
+                            <?php _e('Activer la synchronisation automatique des produits', 'woo-pennylane'); ?>
+                        </label>
+                        <p class="description">
+                            <?php _e('Les produits seront automatiquement synchronisés avec Pennylane lors de leur création ou mise à jour.', 'woo-pennylane'); ?>
+                        </p>
+                    </td>
+                </tr>
+
+                <tr>
+                    <th scope="row">
                         <?php _e('Statuts à Synchroniser', 'woo-pennylane'); ?>
                     </th>
                     <td>
                         <?php
                         $selected_statuses = get_option('woo_pennylane_sync_status', array('completed'));
+                        // S'assurer que selected_statuses est un tableau
+                        if (!is_array($selected_statuses)) {
+                            $selected_statuses = array('completed'); // Valeur par défaut si ce n'est pas un tableau
+                        }
                         $order_statuses = wc_get_order_statuses();
                         foreach ($order_statuses as $status => $label) :
                             $status_key = str_replace('wc-', '', $status);
