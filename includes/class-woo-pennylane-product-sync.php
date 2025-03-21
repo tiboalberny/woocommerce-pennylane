@@ -31,8 +31,11 @@ class WooPennylane_Product_Sync {
      * @return bool Succès ou échec
      * @throws Exception En cas d'erreur
      */
-    public function sync_product($product_id) {
-        $product = wc_get_product($product_id);
+    
+    public function sync_product($product_id, $sync_mode = 'manual') {
+    $product = wc_get_product($product_id);
+    global $woo_pennylane_sync_history;
+    $start_time = microtime(true);
         
         if (!$product) {
             throw new Exception(__('Produit introuvable', 'woo-pennylane'));
@@ -66,6 +69,19 @@ class WooPennylane_Product_Sync {
             update_post_meta($product_id, '_pennylane_product_last_sync', current_time('mysql'));
             delete_post_meta($product_id, '_pennylane_product_sync_error');
 
+            if ($woo_pennylane_sync_history) {
+            $execution_time = microtime(true) - $start_time;
+            $woo_pennylane_sync_history->add_entry(
+                'product',
+                $sync_mode,
+                $product_id,
+                $product->get_name(),
+                'success',
+                'Message de succès',
+                $execution_time
+            );
+        }
+
             return true;
 
         } catch (Exception $e) {
@@ -78,6 +94,18 @@ class WooPennylane_Product_Sync {
             update_post_meta($product_id, '_pennylane_product_sync_error', $e->getMessage());
             update_post_meta($product_id, '_pennylane_product_last_sync', current_time('mysql'));
             
+            if ($woo_pennylane_sync_history) {
+            $execution_time = microtime(true) - $start_time;
+            $woo_pennylane_sync_history->add_entry(
+                'product',
+                $sync_mode,
+                $product_id,
+                $product->get_name(),
+                'error',
+                $e->getMessage(),
+                $execution_time
+            );
+        }
             throw $e;
         }
     }

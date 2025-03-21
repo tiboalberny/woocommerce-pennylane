@@ -84,4 +84,5 @@ class Client {
             'plugin_version' => WOO_PENNYLANE_VERSION
         );
     }
+    
 }

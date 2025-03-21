@@ -94,43 +94,49 @@ class WooPennylane_Settings {
         echo '<script>console.log("WooPennylane: Paramètres", ' . json_encode($debug_info) . ');</script>';
     }
 
-    public function render_admin_page() {
-        $this->active_tab = isset($_GET['tab']) ? sanitize_key($_GET['tab']) : 'settings';
-        ?>
-        <div class="wrap">
-            <h1><?php echo esc_html(get_admin_page_title()); ?></h1>
-            <nav class="nav-tab-wrapper">
-                <a href="?page=woo-pennylane-settings&tab=settings" 
-                   class="nav-tab <?php echo $this->active_tab === 'settings' ? 'nav-tab-active' : ''; ?>">
-                    <?php _e('Paramètres', 'woo-pennylane'); ?>
-                </a>
-                <a href="?page=woo-pennylane-settings&tab=sync" 
-                   class="nav-tab <?php echo $this->active_tab === 'sync' ? 'nav-tab-active' : ''; ?>">
-                    <?php _e('Synchronisation', 'woo-pennylane'); ?>
-                </a>
-                <a href="?page=woo-pennylane-settings&tab=customers" 
-                   class="nav-tab <?php echo $this->active_tab === 'customers' ? 'nav-tab-active' : ''; ?>">
-                    <?php _e('Clients', 'woo-pennylane'); ?>
-                </a>
-                <a href="?page=woo-pennylane-settings&tab=products" 
-                   class="nav-tab <?php echo $this->active_tab === 'products' ? 'nav-tab-active' : ''; ?>">
-                    <?php _e('Produits', 'woo-pennylane'); ?>
-                </a>
-            </nav>
-            <?php
-                if ($this->active_tab === 'customers') {
-                    include WOO_PENNYLANE_PLUGIN_DIR . 'templates/admin-customers.php';
-                } else if ($this->active_tab === 'sync') {
-                    include WOO_PENNYLANE_PLUGIN_DIR . 'templates/admin-sync.php';
-                } else if ($this->active_tab === 'products') {
-                    include WOO_PENNYLANE_PLUGIN_DIR . 'templates/admin-products.php';
-                } else {
-                    include WOO_PENNYLANE_PLUGIN_DIR . 'templates/admin-settings.php';
-                }
+        public function render_admin_page() {
+            $this->active_tab = isset($_GET['tab']) ? sanitize_key($_GET['tab']) : 'settings';
             ?>
-        </div>
-        <?php
-    }
+            <div class="wrap">
+                <h1><?php echo esc_html(get_admin_page_title()); ?></h1>
+                <nav class="nav-tab-wrapper">
+                    <a href="?page=woo-pennylane-settings&tab=settings" 
+                       class="nav-tab <?php echo $this->active_tab === 'settings' ? 'nav-tab-active' : ''; ?>">
+                        <?php _e('Paramètres', 'woo-pennylane'); ?>
+                    </a>
+                    <a href="?page=woo-pennylane-settings&tab=sync" 
+                       class="nav-tab <?php echo $this->active_tab === 'sync' ? 'nav-tab-active' : ''; ?>">
+                        <?php _e('Synchronisation', 'woo-pennylane'); ?>
+                    </a>
+                    <a href="?page=woo-pennylane-settings&tab=customers" 
+                       class="nav-tab <?php echo $this->active_tab === 'customers' ? 'nav-tab-active' : ''; ?>">
+                        <?php _e('Clients', 'woo-pennylane'); ?>
+                    </a>
+                    <a href="?page=woo-pennylane-settings&tab=products" 
+                       class="nav-tab <?php echo $this->active_tab === 'products' ? 'nav-tab-active' : ''; ?>">
+                        <?php _e('Produits', 'woo-pennylane'); ?>
+                    </a>
+                    <a href="?page=woo-pennylane-settings&tab=history" 
+                       class="nav-tab <?php echo $this->active_tab === 'history' ? 'nav-tab-active' : ''; ?>">
+                        <?php _e('Historique', 'woo-pennylane'); ?>
+                    </a>
+                </nav>
+                <?php
+                    if ($this->active_tab === 'customers') {
+                        include WOO_PENNYLANE_PLUGIN_DIR . 'templates/admin-customers.php';
+                    } else if ($this->active_tab === 'sync') {
+                        include WOO_PENNYLANE_PLUGIN_DIR . 'templates/admin-sync.php';
+                    } else if ($this->active_tab === 'products') {
+                        include WOO_PENNYLANE_PLUGIN_DIR . 'templates/admin-products.php';
+                    } else if ($this->active_tab === 'history') {
+                        include WOO_PENNYLANE_PLUGIN_DIR . 'templates/admin-history.php';
+                    } else {
+                        include WOO_PENNYLANE_PLUGIN_DIR . 'templates/admin-settings.php';
+                    }
+                ?>
+            </div>
+            <?php
+        }
 
     public function test_api_connection() {
         check_ajax_referer('woo_pennylane_nonce', 'nonce');

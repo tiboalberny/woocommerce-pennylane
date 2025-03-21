@@ -113,7 +113,8 @@ class WooPennylane {
             'includes/class-woo-pennylane-settings.php',
             'includes/class-woo-pennylane-synchronizer.php',
             'includes/class-woo-pennylane-customer-sync.php',
-            'includes/class-woo-pennylane-product-sync.php'
+            'includes/class-woo-pennylane-product-sync.php',
+            'includes/class-woo-pennylane-cron-sync.php' // Ajout de la classe CRON
         );
         
         // Chargement des fichiers
@@ -147,6 +148,10 @@ class WooPennylane {
             add_filter('bulk_actions-edit-product', array($product_sync, 'add_bulk_actions'));
             add_filter('handle_bulk_actions-edit-product', array($product_sync, 'handle_bulk_actions'), 10, 3);
             add_action('admin_notices', array($product_sync, 'bulk_action_admin_notice'));
+        }
+        // Initialisation de la synchronisation CRON
+        if (class_exists('WooPennylane_Cron_Sync')) {
+            new WooPennylane_Cron_Sync();
         }
     }
 
