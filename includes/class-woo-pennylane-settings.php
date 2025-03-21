@@ -60,6 +60,16 @@ class WooPennylane_Settings {
             array(),
             WOO_PENNYLANE_VERSION
         );
+        // CSS spécifique à l'onglet historique
+        $current_tab = isset($_GET['tab']) ? sanitize_key($_GET['tab']) : 'settings';
+        if ($current_tab === 'history') {
+            wp_enqueue_style(
+                'woo-pennylane-history',
+                WOO_PENNYLANE_PLUGIN_URL . 'assets/css/history.css',
+                array('woo-pennylane-admin'),
+                WOO_PENNYLANE_VERSION
+        );
+    }
 
         wp_enqueue_script(
             'woo-pennylane-admin',
@@ -94,7 +104,7 @@ class WooPennylane_Settings {
         echo '<script>console.log("WooPennylane: Paramètres", ' . json_encode($debug_info) . ');</script>';
     }
 
-        public function render_admin_page() {
+    public function render_admin_page() {
             $this->active_tab = isset($_GET['tab']) ? sanitize_key($_GET['tab']) : 'settings';
             ?>
             <div class="wrap">

@@ -28,6 +28,12 @@ $offset = ($current_page - 1) * $per_page;
 // Récupérer l'historique
 global $woo_pennylane_sync_history;
 
+// Vérifier que l'historique est disponible
+if (!$woo_pennylane_sync_history) {
+    echo '<div class="notice notice-error"><p>' . __('Erreur: Le module d\'historique n\'est pas correctement initialisé.', 'woo-pennylane') . '</p></div>';
+    return;
+}
+
 // Arguments de filtrage
 $args = array(
     'number' => $per_page,
@@ -72,6 +78,9 @@ function get_sortable_link($column, $label, $current_orderby, $current_order, $b
     return '<a href="' . esc_url(add_query_arg(array('orderby' => $column, 'order' => $new_order), $base_url)) . '" class="' . $class . '"><span>' . $label . '</span> ' . $arrow . '</a>';
 }
 
+// Current orderby and order params
+$current_orderby = isset($_GET['orderby']) ? sanitize_text_field($_GET['orderby']) : 'created_at';
+$current_order = isset($_GET['order']) && strtoupper($_GET['order']) === 'ASC' ? 'ASC' : 'DESC';
 ?>
 <div class="wrap woo-pennylane-history">
     <h2><?php _e('Historique des synchronisations Pennylane', 'woo-pennylane'); ?></h2>
@@ -81,120 +90,105 @@ function get_sortable_link($column, $label, $current_orderby, $current_order, $b
             <?php _e('Cet historique vous permet de suivre toutes les synchronisations effectuées avec Pennylane, qu\'elles soient manuelles ou automatiques.', 'woo-pennylane'); ?>
         </p>
         
-        <form method="get" action="<?php echo admin_url('admin.php'); ?>" id="sync-history-filter">
-            <input type="hidden" name="page" value="woo-pennylane-settings">
-            <input type="hidden" name="tab" value="history">
-            
-            <div class="tablenav top">
-                <div class="alignleft actions">
-                    <select name="sync_type">
-                        <option value=""><?php _e('Tous les types', 'woo-pennylane'); ?></option>
-                        <option value="product" <?php selected($sync_type, 'product'); ?>><?php _e('Produits', 'woo-pennylane'); ?></option>
-                        <option value="customer" <?php selected($sync_type, 'customer'); ?>><?php _e('Clients', 'woo-pennylane'); ?></option>
-                        <option value="order" <?php selected($sync_type, 'order'); ?>><?php _e('Commandes', 'woo-pennylane'); ?></option>
-                        <option value="batch" <?php selected($sync_type, 'batch'); ?>><?php _e('Lots', 'woo-pennylane'); ?></option>
-                    </select>
-                    
-                    <select name="sync_mode">
-                        <option value=""><?php _e('Tous les modes', 'woo-pennylane'); ?></option>
-                        <option value="manual" <?php selected($sync_mode, 'manual'); ?>><?php _e('Manuel', 'woo-pennylane'); ?></option>
-                        <option value="automatic" <?php selected($sync_mode, 'automatic'); ?>><?php _e('Automatique', 'woo-pennylane'); ?></option>
-                        <option value="cron" <?php selected($sync_mode, 'cron'); ?>><?php _e('Programmé', 'woo-pennylane'); ?></option>
-                    </select>
-                    
-                    <select name="status">
-                        <option value=""><?php _e('Tous les statuts', 'woo-pennylane'); ?></option>
-                        <option value="success" <?php selected($status, 'success'); ?>><?php _e('Succès', 'woo-pennylane'); ?></option>
-                        <option value="error" <?php selected($status, 'error'); ?>><?php _e('Erreur', 'woo-pennylane'); ?></option>
-                        <option value="warning" <?php selected($status, 'warning'); ?>><?php _e('Avertissement', 'woo-pennylane'); ?></option>
-                        <option value="skipped" <?php selected($status, 'skipped'); ?>><?php _e('Ignoré', 'woo-pennylane'); ?></option>
-                    </select>
-                    
-                    <div class="date-inputs">
-                        <label>
-                            <?php _e('Du', 'woo-pennylane'); ?>
-                            <input type="date" name="date_from" value="<?php echo esc_attr($date_from); ?>">
-                        </label>
-                        
-                        <label>
-                            <?php _e('Au', 'woo-pennylane'); ?>
-                            <input type="date" name="date_to" value="<?php echo esc_attr($date_to); ?>">
-                        </label>
+        <!-- NOUVELLE STRUCTURE POUR LE FORMULAIRE DE FILTRAGE -->
+        <div style="margin-bottom: 40px; border-bottom: 1px solid #ccc; padding-bottom: 20px;">
+            <form method="get" action="<?php echo admin_url('admin.php'); ?>" id="sync-history-filter">
+                <!-- Champs cachés nécessaires -->
+                <input type="hidden" name="page" value="woo-pennylane-settings">
+                <input type="hidden" name="tab" value="history">
+                <input type="hidden" name="orderby" value="<?php echo esc_attr($current_orderby); ?>">
+                <input type="hidden" name="order" value="<?php echo esc_attr($current_order); ?>">
+                
+                <!-- Début du conteneur en grille pour tous les filtres -->
+                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px;">
+                    <!-- Type de synchronisation -->
+                    <div>
+                        <label for="sync_type" style="display: block; margin-bottom: 5px; font-weight: 500;"><?php _e('Type', 'woo-pennylane'); ?></label>
+                        <select id="sync_type" name="sync_type" style="width: 100%; max-width: 100%;">
+                            <option value=""><?php _e('Tous les types', 'woo-pennylane'); ?></option>
+                            <option value="product" <?php selected($sync_type, 'product'); ?>><?php _e('Produits', 'woo-pennylane'); ?></option>
+                            <option value="customer" <?php selected($sync_type, 'customer'); ?>><?php _e('Clients', 'woo-pennylane'); ?></option>
+                            <option value="order" <?php selected($sync_type, 'order'); ?>><?php _e('Commandes', 'woo-pennylane'); ?></option>
+                            <option value="batch" <?php selected($sync_type, 'batch'); ?>><?php _e('Lots', 'woo-pennylane'); ?></option>
+                        </select>
                     </div>
                     
-                    <input type="submit" class="button" value="<?php _e('Filtrer', 'woo-pennylane'); ?>">
+                    <!-- Mode de synchronisation -->
+                    <div>
+                        <label for="sync_mode" style="display: block; margin-bottom: 5px; font-weight: 500;"><?php _e('Mode', 'woo-pennylane'); ?></label>
+                        <select id="sync_mode" name="sync_mode" style="width: 100%; max-width: 100%;">
+                            <option value=""><?php _e('Tous les modes', 'woo-pennylane'); ?></option>
+                            <option value="manual" <?php selected($sync_mode, 'manual'); ?>><?php _e('Manuel', 'woo-pennylane'); ?></option>
+                            <option value="automatic" <?php selected($sync_mode, 'automatic'); ?>><?php _e('Automatique', 'woo-pennylane'); ?></option>
+                            <option value="cron" <?php selected($sync_mode, 'cron'); ?>><?php _e('Programmé', 'woo-pennylane'); ?></option>
+                        </select>
+                    </div>
+                    
+                    <!-- Statut -->
+                    <div>
+                        <label for="status" style="display: block; margin-bottom: 5px; font-weight: 500;"><?php _e('Statut', 'woo-pennylane'); ?></label>
+                        <select id="status" name="status" style="width: 100%; max-width: 100%;">
+                            <option value=""><?php _e('Tous les statuts', 'woo-pennylane'); ?></option>
+                            <option value="success" <?php selected($status, 'success'); ?>><?php _e('Succès', 'woo-pennylane'); ?></option>
+                            <option value="error" <?php selected($status, 'error'); ?>><?php _e('Erreur', 'woo-pennylane'); ?></option>
+                            <option value="warning" <?php selected($status, 'warning'); ?>><?php _e('Avertissement', 'woo-pennylane'); ?></option>
+                            <option value="skipped" <?php selected($status, 'skipped'); ?>><?php _e('Ignoré', 'woo-pennylane'); ?></option>
+                        </select>
+                    </div>
+                    
+                    <!-- Date de début -->
+                    <div>
+                        <label for="date_from" style="display: block; margin-bottom: 5px; font-weight: 500;"><?php _e('Du', 'woo-pennylane'); ?></label>
+                        <input type="date" id="date_from" name="date_from" value="<?php echo esc_attr($date_from); ?>" style="width: 100%; max-width: 100%;">
+                    </div>
+                    
+                    <!-- Date de fin -->
+                    <div>
+                        <label for="date_to" style="display: block; margin-bottom: 5px; font-weight: 500;"><?php _e('Au', 'woo-pennylane'); ?></label>
+                        <input type="date" id="date_to" name="date_to" value="<?php echo esc_attr($date_to); ?>" style="width: 100%; max-width: 100%;">
+                    </div>
+                    
+                    <!-- Recherche -->
+                    <div>
+                        <label for="sync-search-input" style="display: block; margin-bottom: 5px; font-weight: 500;"><?php _e('Rechercher', 'woo-pennylane'); ?></label>
+                        <input type="search" id="sync-search-input" name="s" value="<?php echo esc_attr($search); ?>" placeholder="<?php _e('Rechercher...', 'woo-pennylane'); ?>" style="width: 100%; max-width: 100%;">
+                    </div>
+                </div>
+                
+                <!-- Actions de filtrage -->
+                <div style="margin-top: 20px; display: flex; gap: 10px;">
+                    <input type="submit" class="button button-primary" value="<?php _e('Filtrer', 'woo-pennylane'); ?>">
                     
                     <?php if ($sync_type || $sync_mode || $status || $date_from !== $month_ago || $date_to !== $today || $search) : ?>
                         <a href="<?php echo admin_url('admin.php?page=woo-pennylane-settings&tab=history'); ?>" class="button"><?php _e('Réinitialiser', 'woo-pennylane'); ?></a>
                     <?php endif; ?>
                 </div>
-                
-                <div class="alignright">
-                    <p class="search-box">
-                        <label class="screen-reader-text" for="sync-search-input"><?php _e('Rechercher', 'woo-pennylane'); ?></label>
-                        <input type="search" id="sync-search-input" name="s" value="<?php echo esc_attr($search); ?>" placeholder="<?php _e('Rechercher dans l\'historique...', 'woo-pennylane'); ?>">
-                        <input type="submit" id="search-submit" class="button" value="<?php _e('Rechercher', 'woo-pennylane'); ?>">
-                    </p>
-                </div>
-                
-                <div class="tablenav-pages">
-                    <span class="displaying-num">
-                        <?php
-                        printf(
-                            _n('%s élément', '%s éléments', $total_items, 'woo-pennylane'),
-                            number_format_i18n($total_items)
-                        );
-                        ?>
-                    </span>
-                    
-                    <?php if ($total_pages > 1) : ?>
-                        <span class="pagination-links">
-                            <?php
-                            // Premier page
-                            if ($current_page > 1) {
-                                echo '<a href="' . esc_url(add_query_arg('paged', 1, $base_url)) . '" class="first-page" title="' . esc_attr__('Aller à la première page', 'woo-pennylane') . '">&laquo;</a>';
-                                echo '<a href="' . esc_url(add_query_arg('paged', max(1, $current_page - 1), $base_url)) . '" class="prev-page" title="' . esc_attr__('Aller à la page précédente', 'woo-pennylane') . '">&lsaquo;</a>';
-                            } else {
-                                echo '<span class="tablenav-pages-navspan" aria-hidden="true">&laquo;</span>';
-                                echo '<span class="tablenav-pages-navspan" aria-hidden="true">&lsaquo;</span>';
-                            }
-                            
-                            // Numéro de page
-                            echo '<span class="paging-input">';
-                            echo sprintf(
-                                '<input class="current-page" type="text" name="paged" value="%s" size="1"> ' . __('sur', 'woo-pennylane') . ' <span class="total-pages">%s</span>',
-                                $current_page,
-                                $total_pages
-                            );
-                            echo '</span>';
-                            
-                            // Page suivante et dernière page
-                            if ($current_page < $total_pages) {
-                                echo '<a href="' . esc_url(add_query_arg('paged', min($total_pages, $current_page + 1), $base_url)) . '" class="next-page" title="' . esc_attr__('Aller à la page suivante', 'woo-pennylane') . '">&rsaquo;</a>';
-                                echo '<a href="' . esc_url(add_query_arg('paged', $total_pages, $base_url)) . '" class="last-page" title="' . esc_attr__('Aller à la dernière page', 'woo-pennylane') . '">&raquo;</a>';
-                            } else {
-                                echo '<span class="tablenav-pages-navspan" aria-hidden="true">&rsaquo;</span>';
-                                echo '<span class="tablenav-pages-navspan" aria-hidden="true">&raquo;</span>';
-                            }
-                            ?>
-                        </span>
-                    <?php endif; ?>
-                </div>
-                
-                <div class="clear"></div>
+            </form>
+            
+            <!-- Info sur le nombre total d'éléments -->
+            <div style="margin-top: 20px; text-align: right;">
+                <span>
+                    <?php
+                    printf(
+                        _n('%s élément trouvé', '%s éléments trouvés', $total_items, 'woo-pennylane'),
+                        '<strong>' . number_format_i18n($total_items) . '</strong>'
+                    );
+                    ?>
+                </span>
             </div>
-        </form>
+        </div>
 
+        <!-- TABLEAU DES RÉSULTATS -->
         <table class="wp-list-table widefat fixed striped">
             <thead>
                 <tr>
-                    <th scope="col" class="manage-column column-date"><?php echo get_sortable_link('created_at', __('Date', 'woo-pennylane'), 'created_at', 'DESC', $base_url); ?></th>
-                    <th scope="col" class="manage-column column-type"><?php echo get_sortable_link('sync_type', __('Type', 'woo-pennylane'), 'sync_type', 'ASC', $base_url); ?></th>
-                    <th scope="col" class="manage-column column-mode"><?php echo get_sortable_link('sync_mode', __('Mode', 'woo-pennylane'), 'sync_mode', 'ASC', $base_url); ?></th>
+                    <th scope="col" class="manage-column column-date"><?php echo get_sortable_link('created_at', __('Date', 'woo-pennylane'), $current_orderby, $current_order, $base_url); ?></th>
+                    <th scope="col" class="manage-column column-type"><?php echo get_sortable_link('sync_type', __('Type', 'woo-pennylane'), $current_orderby, $current_order, $base_url); ?></th>
+                    <th scope="col" class="manage-column column-mode"><?php echo get_sortable_link('sync_mode', __('Mode', 'woo-pennylane'), $current_orderby, $current_order, $base_url); ?></th>
                     <th scope="col" class="manage-column column-object"><?php _e('Objet', 'woo-pennylane'); ?></th>
-                    <th scope="col" class="manage-column column-status"><?php echo get_sortable_link('status', __('Statut', 'woo-pennylane'), 'status', 'ASC', $base_url); ?></th>
+                    <th scope="col" class="manage-column column-status"><?php echo get_sortable_link('status', __('Statut', 'woo-pennylane'), $current_orderby, $current_order, $base_url); ?></th>
                     <th scope="col" class="manage-column column-message"><?php _e('Message', 'woo-pennylane'); ?></th>
-                    <th scope="col" class="manage-column column-execution"><?php echo get_sortable_link('execution_time', __('Durée', 'woo-pennylane'), 'execution_time', 'ASC', $base_url); ?></th>
+                    <th scope="col" class="manage-column column-execution"><?php echo get_sortable_link('execution_time', __('Durée', 'woo-pennylane'), $current_orderby, $current_order, $base_url); ?></th>
                     <th scope="col" class="manage-column column-user"><?php _e('Utilisateur', 'woo-pennylane'); ?></th>
                 </tr>
             </thead>
@@ -316,8 +310,10 @@ function get_sortable_link($column, $label, $current_orderby, $current_order, $b
             </tfoot>
         </table>
         
-        <div class="tablenav bottom">
-            <div class="alignleft actions">
+        <!-- PAGINATION ET PURGE -->
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 20px;">
+            <!-- Formulaire de purge -->
+            <div>
                 <form method="post" action="">
                     <?php wp_nonce_field('woo_pennylane_purge_history', 'woo_pennylane_nonce'); ?>
                     <input type="hidden" name="action" value="woo_pennylane_purge_history">
@@ -334,90 +330,109 @@ function get_sortable_link($column, $label, $current_orderby, $current_order, $b
                 </form>
             </div>
             
-            <div class="tablenav-pages">
-                <?php if ($total_pages > 1) : ?>
-                    <span class="pagination-links">
-                        <?php
-                        // Premier page
-                        if ($current_page > 1) {
-                            echo '<a href="' . esc_url(add_query_arg('paged', 1, $base_url)) . '" class="first-page">&laquo;</a>';
-                            echo '<a href="' . esc_url(add_query_arg('paged', max(1, $current_page - 1), $base_url)) . '" class="prev-page">&lsaquo;</a>';
-                        } else {
-                            echo '<span class="tablenav-pages-navspan">&laquo;</span>';
-                            echo '<span class="tablenav-pages-navspan">&lsaquo;</span>';
-                        }
-                        
-                        // Numéro de page
-                        echo '<span class="paging-input">';
-                        echo sprintf(
-                            '<input class="current-page" type="text" name="paged" value="%s" size="1"> ' . __('sur', 'woo-pennylane') . ' <span class="total-pages">%s</span>',
-                            $current_page,
-                            $total_pages
-                        );
-                        echo '</span>';
-                        
-                        // Page suivante et dernière page
-                        if ($current_page < $total_pages) {
-                            echo '<a href="' . esc_url(add_query_arg('paged', min($total_pages, $current_page + 1), $base_url)) . '" class="next-page">&rsaquo;</a>';
-                            echo '<a href="' . esc_url(add_query_arg('paged', $total_pages, $base_url)) . '" class="last-page">&raquo;</a>';
-                        } else {
-                            echo '<span class="tablenav-pages-navspan">&rsaquo;</span>';
-                            echo '<span class="tablenav-pages-navspan">&raquo;</span>';
-                        }
-                        ?>
-                    </span>
-                <?php endif; ?>
-            </div>
-            
-            <div class="clear"></div>
+            <!-- Pagination -->
+            <?php if ($total_pages > 1) : ?>
+                <div style="margin-left: auto;">
+                    <div class="tablenav-pages">
+                        <span class="pagination-links">
+                            <?php
+                            // Premier page
+                            if ($current_page > 1) {
+                                echo '<a href="' . esc_url(add_query_arg('paged', 1, $base_url)) . '" class="first-page">&laquo;</a>';
+                                echo '<a href="' . esc_url(add_query_arg('paged', max(1, $current_page - 1), $base_url)) . '" class="prev-page">&lsaquo;</a>';
+                            } else {
+                                echo '<span class="tablenav-pages-navspan">&laquo;</span>';
+                                echo '<span class="tablenav-pages-navspan">&lsaquo;</span>';
+                            }
+                            
+                            // Numéro de page
+                            echo '<span class="paging-input">';
+                            echo sprintf(
+                                '<input class="current-page" type="text" name="paged" value="%s" size="1"> ' . __('sur', 'woo-pennylane') . ' <span class="total-pages">%s</span>',
+                                $current_page,
+                                $total_pages
+                            );
+                            echo '</span>';
+                            
+                            // Page suivante et dernière page
+                            if ($current_page < $total_pages) {
+                                echo '<a href="' . esc_url(add_query_arg('paged', min($total_pages, $current_page + 1), $base_url)) . '" class="next-page">&rsaquo;</a>';
+                                echo '<a href="' . esc_url(add_query_arg('paged', $total_pages, $base_url)) . '" class="last-page">&raquo;</a>';
+                            } else {
+                                echo '<span class="tablenav-pages-navspan">&rsaquo;</span>';
+                                echo '<span class="tablenav-pages-navspan">&raquo;</span>';
+                            }
+                            ?>
+                        </span>
+                    </div>
+                </div>
+            <?php endif; ?>
         </div>
     </div>
 
-    <style>
-        .column-date { width: 15%; }
-        .column-type { width: 8%; }
-        .column-mode { width: 8%; }
-        .column-object { width: 15%; }
-        .column-status { width: 8%; }
-        .column-message { width: 25%; }
-        .column-execution { width: 8%; }
-        .column-user { width: 13%; }
+    <!-- Modal de détails du log (inchangé) -->
+    <div id="log-details-modal" class="woo-pennylane-modal" style="display:none;">
+        <div class="woo-pennylane-modal-content">
+            <span class="woo-pennylane-modal-close">&times;</span>
+            <h2><?php _e('Détails du log', 'woo-pennylane'); ?></h2>
+            <div class="woo-pennylane-modal-body">
+                <div class="log-details-content"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    jQuery(document).ready(function($) {
+        // Afficher/masquer les détails des données
+        $('.toggle-data').on('click', function(e) {
+            e.preventDefault();
+            $(this).next('.data-details').toggle();
+        });
         
-        .sync-status {
-            display: inline-block;
-            padding: 3px 8px;
-            border-radius: 3px;
-            font-size: 12px;
-            font-weight: 500;
-        }
+        // Modal des détails du log
+        $('.view-log-details').on('click', function(e) {
+            e.preventDefault();
+            var logId = $(this).data('id');
+            
+            // Spinner de chargement
+            var modal = $('#log-details-modal');
+            var content = modal.find('.log-details-content');
+            content.html('<div class="spinner is-active"></div>');
+            modal.show();
+            
+            // Charger les détails du log via AJAX
+            $.ajax({
+                url: ajaxurl,
+                type: 'POST',
+                data: {
+                    action: 'woo_pennylane_get_log_details',
+                    nonce: '<?php echo wp_create_nonce('woo_pennylane_get_log_details'); ?>',
+                    log_id: logId
+                },
+                success: function(response) {
+                    if (response.success) {
+                        content.html(response.data);
+                    } else {
+                        content.html('<div class="notice notice-error"><p>' + response.data + '</p></div>');
+                    }
+                },
+                error: function() {
+                    content.html('<div class="notice notice-error"><p><?php _e('Erreur lors du chargement des détails', 'woo-pennylane'); ?></p></div>');
+                }
+            });
+        });
         
-        .sync-status-success {
-            background-color: #edfaef;
-            color: #0a3622;
-        }
+        // Fermer la modal
+        $('.woo-pennylane-modal-close').on('click', function() {
+            $('#log-details-modal').hide();
+        });
         
-        .sync-status-error {
-            background-color: #fbeaea;
-            color: #8b343c;
-        }
-        
-        .sync-status-warning {
-            background-color: #fcf9e8;
-            color: #8a6d3b;
-        }
-        
-        .sync-status-skipped {
-            background-color: #f0f0f1;
-            color: #666;
-        }
-        
-        #sync-history-filter .date-inputs {
-            display: inline-block;
-            margin: 0 10px;
-        }
-        
-        #sync-history-filter .date-inputs label {
-            margin-right: 10px;
-        }
-    </style>
+        // Fermer la modal en cliquant en dehors
+        $(window).on('click', function(e) {
+            if ($(e.target).is('#log-details-modal')) {
+                $('#log-details-modal').hide();
+            }
+        });
+    });
+    </script>
 </div>

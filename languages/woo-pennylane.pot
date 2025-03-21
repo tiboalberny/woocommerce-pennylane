@@ -1,15 +1,15 @@
-# Copyright (C) 2024 Tibo
+# Copyright (C) 2025 Tibo
 # This file is distributed under the same license as the WooCommerce Pennylane Integration plugin.
 msgid ""
 msgstr ""
-"Project-Id-Version: WooCommerce Pennylane Integration 1.1.0\n"
+"Project-Id-Version: WooCommerce Pennylane Integration 1.3.0\n"
 "Report-Msgid-Bugs-To: https://wordpress.org/support/plugin/woo-pennylane\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"POT-Creation-Date: 2024-02-21T12:00:00+00:00\n"
+"POT-Creation-Date: 2025-03-21T12:00:00+00:00\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "X-Generator: WP-CLI 2.8.1\n"
 "X-Domain: woo-pennylane\n"
@@ -19,7 +19,7 @@ msgid "WooCommerce Pennylane Integration"
 msgstr ""
 
 #. Description of the plugin
-msgid "Intégration entre WooCommerce et Pennylane pour la synchronisation des factures"
+msgid "Intégration entre WooCommerce et Pennylane pour la synchronisation des factures, clients et produits"
 msgstr ""
 
 #: includes/class-woo-pennylane-settings.php:19
@@ -36,6 +36,14 @@ msgstr ""
 
 #: includes/class-woo-pennylane-settings.php:93
 msgid "Synchronisation"
+msgstr ""
+
+#: includes/class-woo-pennylane-settings.php:97
+msgid "Clients"
+msgstr ""
+
+#: includes/class-woo-pennylane-settings.php:101
+msgid "Produits"
 msgstr ""
 
 #: includes/class-woo-pennylane-settings.php:127
@@ -66,6 +74,158 @@ msgstr ""
 msgid "Erreur pour la commande #%d : %s"
 msgstr ""
 
+#: includes/class-woo-pennylane-settings.php:342
+msgid "Client #%d ignoré - données incomplètes"
+msgstr ""
+
+#: includes/class-woo-pennylane-settings.php:348
+msgid "Erreur pour le client #%d : %s"
+msgstr ""
+
+#: includes/class-woo-pennylane-settings.php:449
+msgid "Produit #%d ignoré - déjà synchronisé ou exclu"
+msgstr ""
+
+#: includes/class-woo-pennylane-product-sync.php:23
+msgid "Produit introuvable"
+msgstr ""
+
+#: includes/class-woo-pennylane-product-sync.php:81
+msgid "Nom du produit manquant"
+msgstr ""
+
+#: includes/class-woo-pennylane-product-sync.php:85
+msgid "Référence externe manquante"
+msgstr ""
+
+#: includes/class-woo-pennylane-product-sync.php:89
+msgid "Prix HT manquant"
+msgstr ""
+
+#: includes/class-woo-pennylane-product-sync.php:93
+msgid "Taux de TVA manquant"
+msgstr ""
+
+#: includes/class-woo-pennylane-product-sync.php:276
+msgid "Synchronisation Pennylane"
+msgstr ""
+
+#: includes/class-woo-pennylane-product-sync.php:291
+msgid "Statut:"
+msgstr ""
+
+#: includes/class-woo-pennylane-product-sync.php:291
+msgid "Synchronisé"
+msgstr ""
+
+#: includes/class-woo-pennylane-product-sync.php:292
+msgid "ID Pennylane:"
+msgstr ""
+
+#: includes/class-woo-pennylane-product-sync.php:295
+msgid "Dernière synchronisation:"
+msgstr ""
+
+#: includes/class-woo-pennylane-product-sync.php:296
+msgid "ago"
+msgstr ""
+
+#: includes/class-woo-pennylane-product-sync.php:298
+msgid "Non synchronisé"
+msgstr ""
+
+#: includes/class-woo-pennylane-product-sync.php:302
+msgid "Erreur de synchronisation:"
+msgstr ""
+
+#: includes/class-woo-pennylane-product-sync.php:312
+msgid "Exclure de la synchronisation"
+msgstr ""
+
+#: includes/class-woo-pennylane-product-sync.php:318
+msgid "Synchroniser maintenant"
+msgstr ""
+
+#: includes/class-woo-pennylane-product-sync.php:384
+msgid "Exclu de la synchronisation"
+msgstr ""
+
+#: includes/class-woo-pennylane-product-sync.php:396
+msgid "Sync"
+msgstr ""
+
+#: includes/class-woo-pennylane-product-sync.php:404
+msgid "Synchroniser avec Pennylane"
+msgstr ""
+
+#: templates/admin-products.php:6
+msgid "Synchronisation des produits"
+msgstr ""
+
+#: templates/admin-products.php:10
+msgid "Cette page vous permet de synchroniser vos produits WooCommerce vers Pennylane."
+msgstr ""
+
+#: templates/admin-products.php:11
+msgid "Les informations suivantes seront synchronisées :"
+msgstr ""
+
+#: templates/admin-products.php:13
+msgid "Nom et description"
+msgstr ""
+
+#: templates/admin-products.php:14
+msgid "Prix et taux de TVA"
+msgstr ""
+
+#: templates/admin-products.php:15
+msgid "Référence (SKU)"
+msgstr ""
+
+#: templates/admin-products.php:16
+msgid "Stock"
+msgstr ""
+
+#: templates/admin-products.php:17
+msgid "Catégories"
+msgstr ""
+
+#: templates/admin-products.php:18
+msgid "Variations (pour les produits variables)"
+msgstr ""
+
+#: templates/admin-products.php:23
+msgid "Analyser les produits"
+msgstr ""
+
+#: templates/admin-products.php:29
+msgid "Résultats de l'analyse"
+msgstr ""
+
+#: templates/admin-products.php:33
+msgid "Produits trouvés :"
+msgstr ""
+
+#: templates/admin-products.php:38
+msgid "Déjà synchronisés :"
+msgstr ""
+
+#: templates/admin-products.php:43
+msgid "À synchroniser :"
+msgstr ""
+
+#: templates/admin-products.php:49
+msgid "Démarrer la synchronisation"
+msgstr ""
+
+#: templates/admin-products.php:54
+msgid "Progression"
+msgstr ""
+
+#: templates/admin-products.php:61
+msgid "Journal de synchronisation"
+msgstr ""
+
 #: includes/class-woo-pennylane-synchronizer.php:23
 msgid "Commande introuvable"
 msgstr ""
@@ -76,6 +236,22 @@ msgstr ""
 
 #: includes/class-woo-pennylane-synchronizer.php:196
 msgid "Clé API non configurée"
+msgstr ""
+
+#: includes/class-woo-pennylane-customer-sync.php:23
+msgid "Client introuvable"
+msgstr ""
+
+#: includes/class-woo-pennylane-customer-sync.php:63
+msgid "Prénom manquant"
+msgstr ""
+
+#: includes/class-woo-pennylane-customer-sync.php:67
+msgid "Nom manquant"
+msgstr ""
+
+#: includes/class-woo-pennylane-customer-sync.php:71
+msgid "Adresse de facturation manquante"
 msgstr ""
 
 #: templates/admin-settings.php:10
@@ -147,5 +323,73 @@ msgid "Progression"
 msgstr ""
 
 #: templates/admin-sync.php:56
+msgid "Journal de synchronisation"
+msgstr ""
+
+#: templates/admin-customers.php:6
+msgid "Synchronisation des clients"
+msgstr ""
+
+#: templates/admin-customers.php:10
+msgid "Cette page vous permet de synchroniser vos clients WooCommerce vers Pennylane."
+msgstr ""
+
+#: templates/admin-customers.php:11
+msgid "Les informations suivantes seront synchronisées :"
+msgstr ""
+
+#: templates/admin-customers.php:13
+msgid "Nom et prénom"
+msgstr ""
+
+#: templates/admin-customers.php:14
+msgid "Email"
+msgstr ""
+
+#: templates/admin-customers.php:15
+msgid "Téléphone"
+msgstr ""
+
+#: templates/admin-customers.php:16
+msgid "Adresse de facturation"
+msgstr ""
+
+#: templates/admin-customers.php:17
+msgid "Adresse de livraison (si différente)"
+msgstr ""
+
+#: templates/admin-customers.php:18
+msgid "Numéro de TVA (si disponible)"
+msgstr ""
+
+#: templates/admin-customers.php:23
+msgid "Analyser les clients"
+msgstr ""
+
+#: templates/admin-customers.php:29
+msgid "Résultats de l'analyse"
+msgstr ""
+
+#: templates/admin-customers.php:33
+msgid "Clients trouvés :"
+msgstr ""
+
+#: templates/admin-customers.php:38
+msgid "Déjà synchronisés :"
+msgstr ""
+
+#: templates/admin-customers.php:43
+msgid "À synchroniser :"
+msgstr ""
+
+#: templates/admin-customers.php:49
+msgid "Démarrer la synchronisation"
+msgstr ""
+
+#: templates/admin-customers.php:54
+msgid "Progression"
+msgstr ""
+
+#: templates/admin-customers.php:61
 msgid "Journal de synchronisation"
 msgstr ""

@@ -2,8 +2,8 @@
 /**
  * Plugin Name: WooCommerce Pennylane Integration
  * Plugin URI: https://lespetitschaudrons.fr
- * Description: Intégration entre WooCommerce et Pennylane pour la synchronisation des factures
- * Version: 1.2.0
+ * Description: Intégration entre WooCommerce et Pennylane pour la synchronisation des factures, clients et produits
+ * Version: 1.3.0
  * Author: Tibo
  * Author URI: https://hostophoto.fr
  * License: GPL v2 or later
@@ -22,7 +22,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Définition des constantes
-define('WOO_PENNYLANE_VERSION', '1.2.0');
+define('WOO_PENNYLANE_VERSION', '1.3.0');
 define('WOO_PENNYLANE_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('WOO_PENNYLANE_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('WOO_PENNYLANE_PLUGIN_BASENAME', plugin_basename(__FILE__));
@@ -108,52 +108,60 @@ class WooPennylane {
      * Charge les classes nécessaires
      */
     private function load_classes() {
-        // Chemins des fichiers
-        $files = array(
-            'includes/class-woo-pennylane-settings.php',
-            'includes/class-woo-pennylane-synchronizer.php',
-            'includes/class-woo-pennylane-customer-sync.php',
-            'includes/class-woo-pennylane-product-sync.php',
-            'includes/class-woo-pennylane-cron-sync.php' // Ajout de la classe CRON
-        );
-        
-        // Chargement des fichiers
-        foreach ($files as $file) {
-            $file_path = WOO_PENNYLANE_PLUGIN_DIR . $file;
-            if (file_exists($file_path)) {
-                require_once $file_path;
-            }
-        }
-        
-        // Initialisation des classes
-        if (class_exists('WooPennylane_Settings')) {
-            $this->settings = new WooPennylane_Settings();
-        }
-
-        // Initialisation de la synchronisation des produits
-        if (class_exists('WooPennylane_Product_Sync')) {
-            $product_sync = new WooPennylane_Product_Sync();
-            
-            // Hooks pour les actions de produits
-            add_action('add_meta_boxes', array($product_sync, 'add_product_metabox'));
-            add_action('save_post_product', array($product_sync, 'save_product_metabox'));
-            add_action('woocommerce_update_product', array($product_sync, 'maybe_sync_on_update'));
-            add_action('woocommerce_create_product', array($product_sync, 'maybe_sync_on_update'));
-            
-            // Hooks pour la liste des produits
-            add_filter('manage_edit-product_columns', array($product_sync, 'add_product_list_column'));
-            add_action('manage_product_posts_custom_column', array($product_sync, 'render_product_list_column'), 10, 2);
-            
-            // Hooks pour les actions en masse
-            add_filter('bulk_actions-edit-product', array($product_sync, 'add_bulk_actions'));
-            add_filter('handle_bulk_actions-edit-product', array($product_sync, 'handle_bulk_actions'), 10, 3);
-            add_action('admin_notices', array($product_sync, 'bulk_action_admin_notice'));
-        }
-        // Initialisation de la synchronisation CRON
-        if (class_exists('WooPennylane_Cron_Sync')) {
-            new WooPennylane_Cron_Sync();
+    // Chemins des fichiers
+    $files = array(
+        'includes/class-woo-pennylane-settings.php',
+        'includes/class-woo-pennylane-synchronizer.php',
+        'includes/class-woo-pennylane-customer-sync.php',
+        'includes/class-woo-pennylane-product-sync.php',
+        'includes/class-woo-pennylane-cron-sync.php',
+        'includes/class-woo-pennylane-sync-history.php', // Assurez-vous que ce fichier est inclus
+    );
+    
+    // Chargement des fichiers
+    foreach ($files as $file) {
+        $file_path = WOO_PENNYLANE_PLUGIN_DIR . $file;
+        if (file_exists($file_path)) {
+            require_once $file_path;
         }
     }
+    
+    // Initialisation des classes
+    if (class_exists('WooPennylane_Settings')) {
+        $this->settings = new WooPennylane_Settings();
+    }
+
+    // Initialisation de la synchronisation des produits
+    if (class_exists('WooPennylane_Product_Sync')) {
+        $product_sync = new WooPennylane_Product_Sync();
+        
+        // Hooks pour les actions de produits
+        add_action('add_meta_boxes', array($product_sync, 'add_product_metabox'));
+        add_action('save_post_product', array($product_sync, 'save_product_metabox'));
+        add_action('woocommerce_update_product', array($product_sync, 'maybe_sync_on_update'));
+        add_action('woocommerce_create_product', array($product_sync, 'maybe_sync_on_update'));
+        
+        // Hooks pour la liste des produits
+        add_filter('manage_edit-product_columns', array($product_sync, 'add_product_list_column'));
+        add_action('manage_product_posts_custom_column', array($product_sync, 'render_product_list_column'), 10, 2);
+        
+        // Hooks pour les actions en masse
+        add_filter('bulk_actions-edit-product', array($product_sync, 'add_bulk_actions'));
+        add_filter('handle_bulk_actions-edit-product', array($product_sync, 'handle_bulk_actions'), 10, 3);
+        add_action('admin_notices', array($product_sync, 'bulk_action_admin_notice'));
+    }
+    
+    // Initialisation de la synchronisation CRON
+    if (class_exists('WooPennylane_Cron_Sync')) {
+        new WooPennylane_Cron_Sync();
+    }
+    
+    // Initialisation de l'historique
+    if (class_exists('WooPennylane_Sync_History')) {
+        global $woo_pennylane_sync_history;
+        $woo_pennylane_sync_history = new WooPennylane_Sync_History();
+    }
+}
 
     /**
      * Activation du plugin

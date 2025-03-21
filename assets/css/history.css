@@ -1,0 +1,211 @@
+/* Styles pour l'onglet historique */
+.woo-pennylane-history .card {
+    max-width: 100% !important; /* Forcer la largeur maximale à 100% */
+    width: 100%;
+    margin-top: 20px;
+    padding: 20px;
+    box-sizing: border-box;
+}
+
+/* S'assurer que le conteneur principal utilise également la largeur complète */
+.woo-pennylane-history.wrap {
+    margin: 10px 0 0 2px; /* Ajustement des marges pour maximiser l'espace */
+    max-width: 100%;
+}
+
+/* Ajuster l'espace pour le corps principal de WordPress */
+#wpbody-content {
+    padding-right: 0;
+}
+
+/* ===== CORRECTION DU PROBLÈME DE CHEVAUCHEMENT ===== */
+/* Bloc de filtres avec plus d'espace */
+.woo-pennylane-history .card .description {
+    margin-bottom: 25px;
+}
+
+/* Conteneur de formulaire amélioré */
+.woo-pennylane-history #sync-history-filter {
+    display: block;
+    width: 100%;
+    margin-bottom: 30px; /* Plus d'espace en bas */
+    clear: both;
+}
+
+/* Tablenav avec meilleur espacement */
+.woo-pennylane-history .tablenav.top {
+    padding-bottom: 25px;
+    margin-bottom: 25px;
+    border-bottom: 1px solid #ddd;
+    overflow: hidden; /* Pour contenir ses éléments flottants */
+    clear: both;
+    display: block;
+}
+
+/* Actions de filtrage */
+.woo-pennylane-history .tablenav .alignleft.actions {
+    margin-bottom: 15px; /* Espace supplémentaire */
+    padding: 8px 0;
+    clear: left;
+}
+
+/* Section des dates avec meilleur espacement */
+.woo-pennylane-history #sync-history-filter .date-inputs {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    margin: 15px 0;
+    padding: 5px 0;
+}
+
+/* Espacement entre les contrôles de date */
+.woo-pennylane-history #sync-history-filter .date-inputs label {
+    margin-bottom: 10px;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+
+/* Boutons de filtrage avec meilleur espacement */
+.woo-pennylane-history #sync-history-filter input[type="submit"],
+.woo-pennylane-history #sync-history-filter a.button {
+    margin: 5px 5px 5px 0;
+}
+
+/* Assurer que la recherche ne chevauche pas */
+.woo-pennylane-history .tablenav .alignright {
+    margin-top: 5px;
+    margin-bottom: 10px;
+    clear: right;
+}
+
+/* Pagination plus claire */
+.woo-pennylane-history .tablenav-pages {
+    margin-top: 5px;
+    float: right;
+    clear: right;
+}
+
+/* ===== STYLES DE BASE POUR LE TABLEAU ===== */
+.woo-pennylane-history .wp-list-table {
+    table-layout: fixed;
+    width: 100%;
+    border-collapse: collapse;
+    clear: both;
+    margin-top: 20px; /* Espace supplémentaire au-dessus du tableau */
+}
+
+/* Largeurs des colonnes avec le texte non coupé */
+.woo-pennylane-history .column-date {
+    width: 14%;
+    white-space: nowrap;
+}
+.woo-pennylane-history .column-type {
+    width: 10%;
+    white-space: nowrap;
+}
+.woo-pennylane-history .column-mode {
+    width: 10%;
+    white-space: nowrap;
+}
+.woo-pennylane-history .column-object {
+    width: 16%;
+    word-break: break-word;
+}
+.woo-pennylane-history .column-status {
+    width: 10%;
+    white-space: nowrap;
+}
+.woo-pennylane-history .column-message {
+    width: 22%;
+    word-break: break-word;
+}
+.woo-pennylane-history .column-execution {
+    width: 8%;
+    white-space: nowrap;
+    text-align: center;
+}
+.woo-pennylane-history .column-user {
+    width: 10%;
+    word-break: break-word;
+}
+
+/* Amélioration du padding et de l'espacement des cellules */
+.woo-pennylane-history th,
+.woo-pennylane-history td {
+    padding: 10px 8px;
+    vertical-align: middle;
+}
+
+/* Amélioration de l'affichage des en-têtes de colonnes */
+.woo-pennylane-history th {
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: visible;
+}
+
+/* Assurer que le texte dans les en-têtes ne soit pas coupé */
+.woo-pennylane-history th a {
+    display: inline-block;
+    white-space: nowrap;
+}
+
+/* Amélioration de l'affichage des statuts */
+.woo-pennylane-history .sync-status {
+    display: inline-block;
+    padding: 4px 8px;
+    border-radius: 3px;
+    font-size: 12px;
+    font-weight: 500;
+    white-space: nowrap;
+    min-width: 60px;
+    text-align: center;
+}
+
+/* Amélioration des contrôles de filtrage */
+.woo-pennylane-history #sync-history-filter select,
+.woo-pennylane-history #sync-history-filter input[type="date"] {
+    min-width: 150px;
+    height: 30px;
+}
+
+/* Amélioration des boutons et contrôles */
+.woo-pennylane-history .button {
+    min-height: 30px;
+}
+
+/* Amélioration de la recherche */
+.woo-pennylane-history .search-box {
+    margin-bottom: 10px;
+}
+
+.woo-pennylane-history .search-box input[type="search"] {
+    min-width: 200px;
+}
+
+/* Responsive design */
+@media screen and (max-width: 1200px) {
+    .woo-pennylane-history .wp-list-table {
+        table-layout: auto;
+    }
+    
+    .woo-pennylane-history .column-date,
+    .woo-pennylane-history .column-type,
+    .woo-pennylane-history .column-mode,
+    .woo-pennylane-history .column-object,
+    .woo-pennylane-history .column-status,
+    .woo-pennylane-history .column-message,
+    .woo-pennylane-history .column-execution,
+    .woo-pennylane-history .column-user {
+        width: auto;
+    }
+}
+
+/* Pour les écrans très petits, on peut cacher certaines colonnes moins importantes */
+@media screen and (max-width: 782px) {
+    .woo-pennylane-history .column-execution,
+    .woo-pennylane-history .column-user {
+        display: none;
+    }
+}

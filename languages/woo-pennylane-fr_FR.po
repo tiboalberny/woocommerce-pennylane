@@ -1,15 +1,15 @@
-# Copyright (C) 2024 Tibo
+# Copyright (C) 2025 Tibo
 # This file is distributed under the same license as the WooCommerce Pennylane Integration plugin.
 msgid ""
 msgstr ""
-"Project-Id-Version: WooCommerce Pennylane Integration 1.1.0\n"
+"Project-Id-Version: WooCommerce Pennylane Integration 1.3.0\n"
 "Report-Msgid-Bugs-To: https://wordpress.org/support/plugin/woo-pennylane\n"
 "Language-Team: Français\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"POT-Creation-Date: 2024-02-21T12:00:00+00:00\n"
-"PO-Revision-Date: 2024-02-21 12:00+0100\n"
+"POT-Creation-Date: 2025-03-21T12:00:00+00:00\n"
+"PO-Revision-Date: 2025-03-21 12:00+0100\n"
 "Last-Translator: Tibo\n"
 "Language: fr_FR\n"
 "Plural-Forms: nplurals=2; plural=(n > 1);\n"
@@ -17,8 +17,8 @@ msgstr ""
 msgid "WooCommerce Pennylane Integration"
 msgstr "Intégration WooCommerce Pennylane"
 
-msgid "Intégration entre WooCommerce et Pennylane pour la synchronisation des factures"
-msgstr "Intégration entre WooCommerce et Pennylane pour la synchronisation des factures"
+msgid "Intégration entre WooCommerce et Pennylane pour la synchronisation des factures, clients et produits"
+msgstr "Intégration entre WooCommerce et Pennylane pour la synchronisation des factures, clients et produits"
 
 msgid "Pennylane Integration"
 msgstr "Intégration Pennylane"
@@ -31,6 +31,12 @@ msgstr "Paramètres"
 
 msgid "Synchronisation"
 msgstr "Synchronisation"
+
+msgid "Clients"
+msgstr "Clients"
+
+msgid "Produits"
+msgstr "Produits"
 
 msgid "Permission refusée"
 msgstr "Permission refusée"
@@ -115,3 +121,143 @@ msgstr "Progression"
 
 msgid "Journal de synchronisation"
 msgstr "Journal de synchronisation"
+
+# Nouvelles chaînes pour la synchronisation des clients
+msgid "Synchronisation des clients"
+msgstr "Synchronisation des clients"
+
+msgid "Cette page vous permet de synchroniser vos clients WooCommerce vers Pennylane."
+msgstr "Cette page vous permet de synchroniser vos clients WooCommerce vers Pennylane."
+
+msgid "Les informations suivantes seront synchronisées :"
+msgstr "Les informations suivantes seront synchronisées :"
+
+msgid "Nom et prénom"
+msgstr "Nom et prénom"
+
+msgid "Email"
+msgstr "Email"
+
+msgid "Téléphone"
+msgstr "Téléphone"
+
+msgid "Adresse de facturation"
+msgstr "Adresse de facturation"
+
+msgid "Adresse de livraison (si différente)"
+msgstr "Adresse de livraison (si différente)"
+
+msgid "Numéro de TVA (si disponible)"
+msgstr "Numéro de TVA (si disponible)"
+
+msgid "Analyser les clients"
+msgstr "Analyser les clients"
+
+msgid "Clients trouvés :"
+msgstr "Clients trouvés :"
+
+msgid "Client introuvable"
+msgstr "Client introuvable"
+
+msgid "Prénom manquant"
+msgstr "Prénom manquant"
+
+msgid "Nom manquant"
+msgstr "Nom manquant"
+
+msgid "Adresse de facturation manquante"
+msgstr "Adresse de facturation manquante"
+
+msgid "Client #%d ignoré - données incomplètes"
+msgstr "Client #%d ignoré - données incomplètes"
+
+msgid "Erreur pour le client #%d : %s"
+msgstr "Erreur pour le client #%d : %s"
+
+# Nouvelles chaînes pour la synchronisation des produits
+msgid "Synchronisation des produits"
+msgstr "Synchronisation des produits"
+
+msgid "Cette page vous permet de synchroniser vos produits WooCommerce vers Pennylane."
+msgstr "Cette page vous permet de synchroniser vos produits WooCommerce vers Pennylane."
+
+msgid "Nom et description"
+msgstr "Nom et description"
+
+msgid "Prix et taux de TVA"
+msgstr "Prix et taux de TVA"
+
+msgid "Référence (SKU)"
+msgstr "Référence (SKU)"
+
+msgid "Stock"
+msgstr "Stock"
+
+msgid "Catégories"
+msgstr "Catégories"
+
+msgid "Variations (pour les produits variables)"
+msgstr "Variations (pour les produits variables)"
+
+msgid "Analyser les produits"
+msgstr "Analyser les produits"
+
+msgid "Produits trouvés :"
+msgstr "Produits trouvés :"
+
+msgid "Produit introuvable"
+msgstr "Produit introuvable"
+
+msgid "Produit #%d ignoré - déjà synchronisé ou exclu"
+msgstr "Produit #%d ignoré - déjà synchronisé ou exclu"
+
+msgid "Nom du produit manquant"
+msgstr "Nom du produit manquant"
+
+msgid "Référence externe manquante"
+msgstr "Référence externe manquante"
+
+msgid "Prix HT manquant"
+msgstr "Prix HT manquant"
+
+msgid "Taux de TVA manquant"
+msgstr "Taux de TVA manquant"
+
+msgid "Synchronisation Pennylane"
+msgstr "Synchronisation Pennylane"
+
+msgid "Statut:"
+msgstr "Statut:"
+
+msgid "Synchronisé"
+msgstr "Synchronisé"
+
+msgid "ID Pennylane:"
+msgstr "ID Pennylane:"
+
+msgid "Dernière synchronisation:"
+msgstr "Dernière synchronisation:"
+
+msgid "ago"
+msgstr "il y a"
+
+msgid "Non synchronisé"
+msgstr "Non synchronisé"
+
+msgid "Erreur de synchronisation:"
+msgstr "Erreur de synchronisation:"
+
+msgid "Exclure de la synchronisation"
+msgstr "Exclure de la synchronisation"
+
+msgid "Synchroniser maintenant"
+msgstr "Synchroniser maintenant"
+
+msgid "Exclu de la synchronisation"
+msgstr "Exclu de la synchronisation"
+
+msgid "Sync"
+msgstr "Sync"
+
+msgid "Synchroniser avec Pennylane"
+msgstr "Synchroniser avec Pennylane"
