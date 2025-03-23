@@ -1,26 +1,27 @@
 # WooCommerce Pennylane Integration
 
-Version: 1.3.0
+Version: 1.4.0
 Développé par Tibo
 
-Plugin WordPress permettant l'intégration entre WooCommerce et Pennylane pour la synchronisation automatique des factures, clients et produits.
+Plugin WordPress permettant l'intégration entre WooCommerce et Pennylane pour la synchronisation automatique des factures, clients, produits et clients invités.
 
 ## État actuel
 - ✅ Configuration du plugin
 - ✅ Test de connexion API
 - ✅ Synchronisation des commandes
-- ✅ Synchronisation des clients
+- ✅ Synchronisation des clients avec compte
+- ✅ Synchronisation des clients invités (sans compte)
 - ✅ Synchronisation des produits
 - ✅ Gestion des codes comptables
-- 🔄 Synchronisation des remboursements (à venir)
 
-## Fonctionnalités
-- Synchronisation bidirectionnelle des produits WooCommerce vers Pennylane
-- Synchronisation des clients et de leurs informations de facturation
-- Génération automatique des factures dans Pennylane à partir des commandes WooCommerce
-- Interface d'administration complète pour gérer les synchronisations
-- Mode debug pour faciliter la résolution des problèmes
-- Possibilité d'exclure certains éléments de la synchronisation
+## Fonctionnalités clés
+- Synchronisation des commandes WooCommerce vers Pennylane en tant que factures
+- Synchronisation des clients WooCommerce vers Pennylane
+- Prise en charge des clients invités (sans compte WooCommerce)
+- Synchronisation des produits avec leurs caractéristiques (prix, TVA, descriptions)
+- Synchronisation automatique ou manuelle selon vos préférences
+- Interface d'administration intuitive pour suivre et gérer les synchronisations
+- Mode debug pour faciliter le dépannage
 
 ## Installation
 1. Téléchargez le plugin
@@ -34,14 +35,8 @@ Plugin WordPress permettant l'intégration entre WooCommerce et Pennylane pour l
 - WooCommerce 5.0 ou supérieur
 - Une clé API Pennylane valide
 
-## Utilisation
-1. Renseignez votre clé API Pennylane dans les paramètres du plugin
-2. Configurez les options de synchronisation selon vos besoins
-3. Utilisez les différents onglets pour synchroniser vos commandes, clients et produits
-4. Consultez les logs en cas de problème
-
-## Support
-Pour toute question ou suggestion, veuillez contacter l'auteur ou ouvrir une issue sur le dépôt du plugin.
+## Synchronisation des clients invités
+Le plugin détecte automatiquement les clients qui ont passé commande sans créer de compte WooCommerce, et permet de les synchroniser vers Pennylane sans créer de doublons. Les informations utilisées sont celles fournies lors de la commande.
 
 ## Changelog
 [Voir CHANGELOG.md](CHANGELOG.md)

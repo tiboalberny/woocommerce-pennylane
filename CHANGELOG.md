@@ -1,34 +1,18 @@
 # Changelog
-## 1.3.0 - 2025-03-21
+## 1.4.0 - 2025-03-23
 ### Ajouté
-- Synchronisation bidirectionnelle complète des produits
-- Interface de gestion des produits avec statut de synchronisation
-- Métabox dans l'éditeur de produit pour synchronisation manuelle
-- Actions en masse pour synchroniser plusieurs produits à la fois
-- Option d'exclusion de produits de la synchronisation automatique
+- Support pour la synchronisation des clients invités (sans compte WooCommerce)
+- Détection automatique des clients invités ayant passé commande
+- Interface d'administration dédiée aux clients invités
+- Prévention des doublons lors de la synchronisation avec Pennylane
 
-### Amélioré
-- Gestion des erreurs de synchronisation plus détaillée
-- Interface utilisateur plus intuitive
-- Performance globale améliorée lors des synchronisations par lots
-- Documentation utilisateur enrichie
-
-### Corrigé
-- Problèmes de compatibilité avec les dernières versions de WooCommerce
-- Gestion correcte des variations de produits
-- Traitement des caractères spéciaux dans les noms de produits
-- Diverses corrections mineures et optimisations
-
-## 1.2.0 - 2024-03-01
+## 1.3.0 - 2024-XX-XX
 ### Ajouté
-- Synchronisation des clients entre WooCommerce et Pennylane
-- Interface dédiée pour la gestion des clients
-- Options pour exclure certains clients de la synchronisation
+- Synchronisation des produits
 
-### Amélioré
-- Interface utilisateur plus responsive
-- Meilleure gestion des erreurs API
-- Optimisation des performances lors des synchronisations par lots
+## 1.2.0 - 2024-XX-XX
+### Ajouté
+- Synchronisation des clients
 
 ## 1.1.0 - 2024-02-21
 ### Ajouté

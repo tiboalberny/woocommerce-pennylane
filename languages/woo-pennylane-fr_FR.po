@@ -1,263 +1,71 @@
-# Copyright (C) 2025 Tibo
-# This file is distributed under the same license as the WooCommerce Pennylane Integration plugin.
-msgid ""
-msgstr ""
-"Project-Id-Version: WooCommerce Pennylane Integration 1.3.0\n"
-"Report-Msgid-Bugs-To: https://wordpress.org/support/plugin/woo-pennylane\n"
-"Language-Team: Français\n"
-"MIME-Version: 1.0\n"
-"Content-Type: text/plain; charset=UTF-8\n"
-"Content-Transfer-Encoding: 8bit\n"
-"POT-Creation-Date: 2025-03-21T12:00:00+00:00\n"
-"PO-Revision-Date: 2025-03-21 12:00+0100\n"
-"Last-Translator: Tibo\n"
-"Language: fr_FR\n"
-"Plural-Forms: nplurals=2; plural=(n > 1);\n"
-
-msgid "WooCommerce Pennylane Integration"
-msgstr "Intégration WooCommerce Pennylane"
-
-msgid "Intégration entre WooCommerce et Pennylane pour la synchronisation des factures, clients et produits"
-msgstr "Intégration entre WooCommerce et Pennylane pour la synchronisation des factures, clients et produits"
-
-msgid "Pennylane Integration"
-msgstr "Intégration Pennylane"
-
-msgid "Pennylane"
-msgstr "Pennylane"
-
-msgid "Paramètres"
-msgstr "Paramètres"
-
-msgid "Synchronisation"
-msgstr "Synchronisation"
-
-msgid "Clients"
-msgstr "Clients"
-
-msgid "Produits"
-msgstr "Produits"
-
-msgid "Permission refusée"
-msgstr "Permission refusée"
-
-msgid "Clé API manquante"
-msgstr "Clé API manquante"
-
-msgid "Connexion à l'API réussie"
-msgstr "Connexion à l'API réussie"
-
-msgid "Erreur API (HTTP %s): %s"
-msgstr "Erreur API (HTTP %s): %s"
-
-msgid "Dates manquantes"
-msgstr "Dates manquantes"
-
-msgid "Commande #%d synchronisée avec succès"
-msgstr "Commande #%d synchronisée avec succès"
-
-msgid "Erreur pour la commande #%d : %s"
-msgstr "Erreur pour la commande #%d : %s"
-
-msgid "Commande introuvable"
-msgstr "Commande introuvable"
-
-msgid "Frais de livraison"
-msgstr "Frais de livraison"
-
-msgid "Clé API non configurée"
-msgstr "Clé API non configurée"
-
-msgid "Clé API"
-msgstr "Clé API"
-
-msgid "Votre clé API Pennylane"
-msgstr "Votre clé API Pennylane"
-
-msgid "Tester la connexion"
-msgstr "Tester la connexion"
-
-msgid "Mode Debug"
-msgstr "Mode Debug"
-
-msgid "Activer le mode debug"
-msgstr "Activer le mode debug"
-
-msgid "Active les logs détaillés pour le débogage"
-msgstr "Active les logs détaillés pour le débogage"
-
-msgid "Synchronisation des commandes"
-msgstr "Synchronisation des commandes"
-
-msgid "Sélection de la période"
-msgstr "Sélection de la période"
-
-msgid "Date de début :"
-msgstr "Date de début :"
-
-msgid "Date de fin :"
-msgstr "Date de fin :"
-
-msgid "Analyser les commandes"
-msgstr "Analyser les commandes"
-
-msgid "Résultats de l'analyse"
-msgstr "Résultats de l'analyse"
-
-msgid "Commandes trouvées :"
-msgstr "Commandes trouvées :"
-
-msgid "Déjà synchronisées :"
-msgstr "Déjà synchronisées :"
-
-msgid "À synchroniser :"
-msgstr "À synchroniser :"
-
-msgid "Démarrer la synchronisation"
-msgstr "Démarrer la synchronisation"
-
-msgid "Progression"
-msgstr "Progression"
-
-msgid "Journal de synchronisation"
-msgstr "Journal de synchronisation"
-
 # Nouvelles chaînes pour la synchronisation des clients
-msgid "Synchronisation des clients"
-msgstr "Synchronisation des clients"
+msgid "Synchronisation des Clients"
+msgstr "Synchronisation des Clients"
 
-msgid "Cette page vous permet de synchroniser vos clients WooCommerce vers Pennylane."
-msgstr "Cette page vous permet de synchroniser vos clients WooCommerce vers Pennylane."
+msgid "Activer la synchronisation automatique des clients"
+msgstr "Activer la synchronisation automatique des clients"
 
-msgid "Les informations suivantes seront synchronisées :"
-msgstr "Les informations suivantes seront synchronisées :"
+msgid "Les clients seront automatiquement synchronisés avec Pennylane lors de leur création ou mise à jour."
+msgstr "Les clients seront automatiquement synchronisés avec Pennylane lors de leur création ou mise à jour."
 
-msgid "Nom et prénom"
-msgstr "Nom et prénom"
-
-msgid "Email"
-msgstr "Email"
-
-msgid "Téléphone"
-msgstr "Téléphone"
-
-msgid "Adresse de facturation"
-msgstr "Adresse de facturation"
-
-msgid "Adresse de livraison (si différente)"
-msgstr "Adresse de livraison (si différente)"
-
-msgid "Numéro de TVA (si disponible)"
-msgstr "Numéro de TVA (si disponible)"
-
-msgid "Analyser les clients"
-msgstr "Analyser les clients"
-
-msgid "Clients trouvés :"
-msgstr "Clients trouvés :"
-
-msgid "Client introuvable"
-msgstr "Client introuvable"
-
-msgid "Prénom manquant"
-msgstr "Prénom manquant"
-
-msgid "Nom manquant"
-msgstr "Nom manquant"
-
-msgid "Adresse de facturation manquante"
-msgstr "Adresse de facturation manquante"
-
-msgid "Client #%d ignoré - données incomplètes"
-msgstr "Client #%d ignoré - données incomplètes"
-
-msgid "Erreur pour le client #%d : %s"
-msgstr "Erreur pour le client #%d : %s"
-
-# Nouvelles chaînes pour la synchronisation des produits
-msgid "Synchronisation des produits"
-msgstr "Synchronisation des produits"
-
-msgid "Cette page vous permet de synchroniser vos produits WooCommerce vers Pennylane."
-msgstr "Cette page vous permet de synchroniser vos produits WooCommerce vers Pennylane."
-
-msgid "Nom et description"
-msgstr "Nom et description"
-
-msgid "Prix et taux de TVA"
-msgstr "Prix et taux de TVA"
-
-msgid "Référence (SKU)"
-msgstr "Référence (SKU)"
-
-msgid "Stock"
-msgstr "Stock"
-
-msgid "Catégories"
-msgstr "Catégories"
-
-msgid "Variations (pour les produits variables)"
-msgstr "Variations (pour les produits variables)"
-
-msgid "Analyser les produits"
-msgstr "Analyser les produits"
-
-msgid "Produits trouvés :"
-msgstr "Produits trouvés :"
-
-msgid "Produit introuvable"
-msgstr "Produit introuvable"
-
-msgid "Produit #%d ignoré - déjà synchronisé ou exclu"
-msgstr "Produit #%d ignoré - déjà synchronisé ou exclu"
-
-msgid "Nom du produit manquant"
-msgstr "Nom du produit manquant"
-
-msgid "Référence externe manquante"
-msgstr "Référence externe manquante"
-
-msgid "Prix HT manquant"
-msgstr "Prix HT manquant"
-
-msgid "Taux de TVA manquant"
-msgstr "Taux de TVA manquant"
-
-msgid "Synchronisation Pennylane"
-msgstr "Synchronisation Pennylane"
-
-msgid "Statut:"
-msgstr "Statut:"
-
-msgid "Synchronisé"
-msgstr "Synchronisé"
-
-msgid "ID Pennylane:"
-msgstr "ID Pennylane:"
-
-msgid "Dernière synchronisation:"
-msgstr "Dernière synchronisation:"
-
-msgid "ago"
-msgstr "il y a"
-
-msgid "Non synchronisé"
-msgstr "Non synchronisé"
-
-msgid "Erreur de synchronisation:"
-msgstr "Erreur de synchronisation:"
+msgid "Informations Pennylane"
+msgstr "Informations Pennylane"
 
 msgid "Exclure de la synchronisation"
 msgstr "Exclure de la synchronisation"
 
+msgid "Ne pas synchroniser ce client avec Pennylane"
+msgstr "Ne pas synchroniser ce client avec Pennylane"
+
+msgid "Statut Pennylane"
+msgstr "Statut Pennylane"
+
+msgid "Actions"
+msgstr "Actions"
+
 msgid "Synchroniser maintenant"
 msgstr "Synchroniser maintenant"
 
-msgid "Exclu de la synchronisation"
-msgstr "Exclu de la synchronisation"
+msgid "Réessayer la synchronisation"
+msgstr "Réessayer la synchronisation"
 
-msgid "Sync"
-msgstr "Sync"
+msgid "Erreur de synchronisation"
+msgstr "Erreur de synchronisation"
 
-msgid "Synchroniser avec Pennylane"
-msgstr "Synchroniser avec Pennylane"
+msgid "Tentative de synchronisation:"
+msgstr "Tentative de synchronisation:"
+
+msgid "Erreur de communication avec le serveur"
+msgstr "Erreur de communication avec le serveur"
+
+msgid "Client \"%s\" trouvé et associé dans Pennylane (ID: %s)"
+msgstr "Client \"%s\" trouvé et associé dans Pennylane (ID: %s)"
+
+msgid "Client \"%s\" synchronisé avec succès (ID: %s)"
+msgstr "Client \"%s\" synchronisé avec succès (ID: %s)"
+
+msgid "Client \"%s\" synchronisé avec succès"
+msgstr "Client \"%s\" synchronisé avec succès"
+
+msgid "Client #%d ignoré - déjà synchronisé ou exclu"
+msgstr "Client #%d ignoré - déjà synchronisé ou exclu"
+
+msgid "ID client invalide"
+msgstr "ID client invalide"
+
+msgid "Adresse de facturation incomplète"
+msgstr "Adresse de facturation incomplète"
+
+msgid "Adresse de livraison incomplète"
+msgstr "Adresse de livraison incomplète"
+msgid "Synchroniser"
+msgstr "Synchroniser"
+
+msgid "Resynchroniser"
+msgstr "Resynchroniser"
+
+msgid "Exclu"
+msgstr "Exclu"
+
+msgid "Dernière: %s"
+msgstr "Dernière: %s"

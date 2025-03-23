@@ -54,24 +54,79 @@ jQuery(document).ready(function($) {
     });
 
     // Toggle visibilité du champ API key
-    $('input[type="password"]').each(function() {
+    // Modification du code pour éviter la duplication du bouton
+    // NE PAS ajouter de bouton supplémentaire, utiliser seulement celui qui existe déjà
+    $('.api-key-wrapper input[type="password"]').each(function() {
         const input = $(this);
-        const showButton = $('<button type="button" class="button button-secondary toggle-password">Afficher</button>');
+        // Création du bouton si nécessaire (si aucun bouton de toggle n'existe déjà)
+        if (input.next('.toggle-password').length === 0) {
+            const showButton = $('<button type="button" class="button button-secondary toggle-password">Afficher</button>');
+            input.after(showButton);
+            
+            showButton.on('click', function(e) {
+                e.preventDefault();
+                if (input.attr('type') === 'password') {
+                    input.attr('type', 'text');
+                    showButton.text('Masquer');
+                } else {
+                    input.attr('type', 'password');
+                    showButton.text('Afficher');
+                }
+            });
+        }
+    });
+
+   // Gestion de la synchronisation des clients depuis la liste des utilisateurs
+    $(document).on('click', '.sync-pennylane-customer', function(e) {
+        e.preventDefault();
         
-        input.after(showButton);
+        const button = $(this);
+        const userId = button.data('user-id');
+        const nonce = button.data('nonce');
+        const spinner = button.next('.spinner');
+        const resultSpan = button.siblings('.sync-result');
+        const isResync = button.hasClass('resync');
         
-        showButton.on('click', function(e) {
-            e.preventDefault();
-            if (input.attr('type') === 'password') {
-                input.attr('type', 'text');
-                showButton.text('Masquer');
-            } else {
-                input.attr('type', 'password');
-                showButton.text('Afficher');
+        // Désactiver le bouton et afficher le spinner
+        button.prop('disabled', true);
+        spinner.addClass('is-active');
+        resultSpan.empty();
+        
+        // Envoyer la requête AJAX
+        $.ajax({
+            url: wooPennylaneParams.ajaxUrl,
+            type: 'POST',
+            data: {
+                action: 'woo_pennylane_sync_single_customer',
+                nonce: wooPennylaneParams.nonce,
+                customer_id: userId,
+                user_nonce: nonce,
+                force_resync: isResync ? 'yes' : 'no'
+            },
+            success: function(response) {
+                spinner.removeClass('is-active');
+                
+                if (response.success) {
+                    resultSpan.html('<span class="sync-success" style="color:green;">' + response.data.message + '</span>');
+                    
+                    // Rafraîchir la page après un court délai
+                    setTimeout(function() {
+                        window.location.reload();
+                    }, 2000);
+                } else {
+                    resultSpan.html('<span class="sync-error" style="color:red;">' + response.data.message + '</span>');
+                }
+            },
+            error: function() {
+                spinner.removeClass('is-active');
+                resultSpan.html('<span class="sync-error" style="color:red;">' + wooPennylaneParams.i18n.sync_error + '</span>');
+            },
+            complete: function() {
+                button.prop('disabled', false);
             }
         });
     });
-    
+            
     // Analyse des commandes
     $('#analyze-orders').on('click', function(e) {
         e.preventDefault();
@@ -319,6 +374,163 @@ jQuery(document).ready(function($) {
         syncNextCustomerBatch();
     });
 
+        // Initialisation de la boîte de dialogue de confirmation
+        // $("#resync-confirmation-dialog").dialog({
+        //    autoOpen: false,
+        //    modal: true,
+        //    buttons: {
+        //        "Confirmer": function() {
+        //            $(this).dialog("close");
+        //            forceResyncCustomers();
+        //        },
+        //        "Annuler": function() {
+        //            $(this).dialog("close");
+        //        }
+        //    }
+        // });
+
+        // Gestion du bouton de resynchronisation forcée
+        $('#force-resync-customers').on('click', function(e) {
+            e.preventDefault();
+            $("#resync-confirmation-dialog").dialog("open");
+        });
+        
+        // Fonction pour forcer la resynchronisation
+        function forceResyncCustomers() {
+            const button = $('#force-resync-customers');
+            
+            button.prop('disabled', true);
+            button.after('<span class="spinner is-active"></span>');
+            
+            // Affiche la barre de progression
+            $('#customer-sync-progress').show();
+            $('#customer-sync-log-content').empty();
+            
+            // Ajout d'un message de début
+            addCustomerLogEntry(__('Début de la resynchronisation forcée des clients...', 'woo-pennylane'), 'info');
+            
+            // Appel AJAX pour récupérer la liste des clients à resynchroniser
+            $.ajax({
+                url: wooPennylaneParams.ajaxUrl,
+                type: 'POST',
+                data: {
+                    action: 'woo_pennylane_get_synced_customers',
+                    nonce: wooPennylaneParams.nonce
+                },
+                success: function(response) {
+                    if (response.success) {
+                        const customers = response.data.customers;
+                        const totalCustomers = customers.length;
+                        
+                        if (totalCustomers === 0) {
+                            addCustomerLogEntry(__('Aucun client à resynchroniser.', 'woo-pennylane'), 'info');
+                            button.prop('disabled', false);
+                            button.next('.spinner').remove();
+                            return;
+                        }
+                        
+                        addCustomerLogEntry(
+                            sprintf(__('%d clients trouvés pour la resynchronisation.', 'woo-pennylane'), totalCustomers),
+                            'info'
+                        );
+                        
+                        // Initialisation des compteurs
+                        let processedCount = 0;
+                        let successCount = 0;
+                        let errorCount = 0;
+                        
+                        // Fonction de mise à jour de la progression
+                        function updateResyncProgress() {
+                            const percentage = Math.round((processedCount / totalCustomers) * 100);
+                            $('#customer-sync-progress .progress-bar-inner').css('width', percentage + '%');
+                            $('#customer-sync-progress .progress-text').text(percentage + '%');
+                        }
+                        
+                        // Fonction récursive pour synchroniser les clients un par un
+                        function resyncNextCustomer(index) {
+                            if (index >= totalCustomers) {
+                                // Fin de la resynchronisation
+                                addCustomerLogEntry(
+                                    sprintf(__('Resynchronisation terminée. %d clients synchronisés, %d erreurs.', 'woo-pennylane'), 
+                                        successCount, errorCount),
+                                    'success'
+                                );
+                                button.prop('disabled', false);
+                                button.next('.spinner').remove();
+                                return;
+                            }
+                            
+                            const customerId = customers[index];
+                            
+                            $.ajax({
+                                url: wooPennylaneParams.ajaxUrl,
+                                type: 'POST',
+                                data: {
+                                    action: 'woo_pennylane_sync_single_customer',
+                                    nonce: wooPennylaneParams.nonce,
+                                    customer_id: customerId,
+                                    force_resync: 'yes'
+                                },
+                                success: function(response) {
+                                    processedCount++;
+                                    
+                                    if (response.success) {
+                                        successCount++;
+                                        addCustomerLogEntry(response.data.message, 'success');
+                                    } else {
+                                        errorCount++;
+                                        addCustomerLogEntry(
+                                            sprintf(__('Erreur client #%d: %s', 'woo-pennylane'), 
+                                                customerId, response.data.message),
+                                            'error'
+                                        );
+                                    }
+                                    
+                                    updateResyncProgress();
+                                    
+                                    // Traitement du client suivant
+                                    resyncNextCustomer(index + 1);
+                                },
+                                error: function() {
+                                    processedCount++;
+                                    errorCount++;
+                                    
+                                    addCustomerLogEntry(
+                                        sprintf(__('Erreur de communication lors de la synchronisation du client #%d', 'woo-pennylane'), 
+                                            customerId),
+                                        'error'
+                                    );
+                                    
+                                    updateResyncProgress();
+                                    
+                                    // Continue avec le client suivant malgré l'erreur
+                                    resyncNextCustomer(index + 1);
+                                }
+                            });
+                        }
+                        
+                        // Démarrer la resynchronisation avec le premier client
+                        resyncNextCustomer(0);
+                        
+                    } else {
+                        addCustomerLogEntry(__('Erreur: ') + response.data, 'error');
+                        button.prop('disabled', false);
+                        button.next('.spinner').remove();
+                    }
+                },
+                error: function() {
+                    addCustomerLogEntry(__('Erreur de communication avec le serveur', 'woo-pennylane'), 'error');
+                    button.prop('disabled', false);
+                    button.next('.spinner').remove();
+                }
+            });
+        }
+
+        // Fonction helper pour ajouter des entrées dans le journal
+        function addCustomerLogEntry(message, type) {
+            const entry = $('<div class="log-entry ' + type + '">' + message + '</div>');
+            $('#customer-sync-log-content').prepend(entry);
+        }
     // Analyse des produits
     $('#analyze-products').on('click', function(e) {
         e.preventDefault();
@@ -526,4 +738,128 @@ jQuery(document).ready(function($) {
             }
         });
     });
+});
+jQuery(document).ready(function($) {
+    console.log("Test JavaScript WooPennylane");
+    
+    // Test spécifique pour le bouton
+    if ($('.sync-pennylane-customer').length) {
+        console.log("Boutons trouvés:", $('.sync-pennylane-customer').length);
+    } else {
+        console.log("Aucun bouton n'a été trouvé avec la classe .sync-pennylane-customer");
+    }
+
+    // Analyse des clients invités
+$('#analyze-guest-customers').on('click', function(e) {
+    e.preventDefault();
+    
+    console.log("Bouton d'analyse des clients invités cliqué");
+    
+    const button = $(this);
+    
+    button.prop('disabled', true);
+    button.after('<span class="spinner is-active"></span>');
+
+    $.ajax({
+        url: wooPennylaneParams.ajaxUrl,
+        type: 'POST',
+        data: {
+            action: 'woo_pennylane_analyze_guest_customers',
+            nonce: wooPennylaneParams.nonce
+        },
+        success: function(response) {
+            console.log("Réponse d'analyse des clients invités:", response);
+            button.next('.spinner').remove();
+            
+            if (response.success) {
+                const data = response.data;
+                
+                $('#guest-customers-found').text(data.total);
+                $('#guest-customers-synced').text(data.synced);
+                $('#guest-customers-to-sync').text(data.to_sync);
+                
+                $('#guest-customers-results').show();
+                $('#start-guest-customer-sync').prop('disabled', data.to_sync === 0);
+            } else {
+                alert(response.data);
+            }
+        },
+        error: function(xhr, status, error) {
+            console.error("Erreur AJAX:", status, error);
+            button.next('.spinner').remove();
+            alert('Erreur de communication avec le serveur');
+        },
+        complete: function() {
+            button.prop('disabled', false);
+        }
+    });
+});
+
+// Synchronisation des clients invités
+$('#start-guest-customer-sync').on('click', function(e) {
+    e.preventDefault();
+    
+    console.log("Bouton de synchronisation des clients invités cliqué");
+    
+    const button = $(this);
+    
+    button.prop('disabled', true);
+    $('#guest-customer-sync-progress').show();
+    
+    let processedCustomers = 0;
+    const totalCustomers = parseInt($('#guest-customers-to-sync').text(), 10);
+
+    function updateProgress(current, total) {
+        const percentage = Math.round((current / total) * 100);
+        $('#guest-customer-sync-progress .progress-bar-inner').css('width', percentage + '%');
+        $('#guest-customer-sync-progress .progress-text').text(percentage + '%');
+    }
+
+    function addLogEntry(message, type) {
+        const entry = $('<div class="log-entry ' + type + '">' + message + '</div>');
+        $('#guest-customer-sync-log-content').prepend(entry);
+    }
+
+    function syncNextBatch() {
+        $.ajax({
+            url: wooPennylaneParams.ajaxUrl,
+            type: 'POST',
+            data: {
+                action: 'woo_pennylane_sync_guest_customers',
+                nonce: wooPennylaneParams.nonce,
+                offset: processedCustomers
+            },
+            success: function(response) {
+                console.log("Réponse de synchronisation des clients invités:", response);
+                if (response.success) {
+                    processedCustomers += response.data.processed;
+                    
+                    response.data.results.forEach(function(result) {
+                        addLogEntry(result.message, result.status);
+                    });
+                    
+                    updateProgress(processedCustomers, totalCustomers);
+                    
+                    if (processedCustomers < totalCustomers) {
+                        syncNextBatch();
+                    } else {
+                        button.prop('disabled', false);
+                        addLogEntry('Synchronisation des clients invités terminée', 'success');
+                    }
+                } else {
+                    button.prop('disabled', false);
+                    addLogEntry('Erreur : ' + response.data, 'error');
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error("Erreur AJAX:", status, error);
+                button.prop('disabled', false);
+                addLogEntry('Erreur de communication avec le serveur', 'error');
+            }
+        });
+    }
+
+    // Démarrer la synchronisation
+    syncNextBatch();
+});
 });

@@ -48,9 +48,10 @@ if (!current_user_can('manage_woocommerce')) {
                                    name="woo_pennylane_api_key"
                                    value="<?php echo esc_attr(get_option('woo_pennylane_api_key')); ?>" 
                                    class="regular-text">
-                            <button type="button" class="button woo-pennylane-toggle-visibility">
-                                <?php _e('Afficher', 'woo-pennylane'); ?>
-                            </button>
+                            <!-- Suppression de la ligne qui génère un bouton Afficher en double -->
+                            <!-- <button type="button" class="button woo-pennylane-toggle-visibility"> -->
+                            <!-- <?php _e('Afficher', 'woo-pennylane'); ?> -->
+                            <!-- </button> -->
                             <button type="button" class="button button-secondary" id="woo-pennylane-test-connection">
                                 <?php _e('Tester la connexion', 'woo-pennylane'); ?>
                             </button>
@@ -164,6 +165,25 @@ if (!current_user_can('manage_woocommerce')) {
                         </label>
                         <p class="description">
                             <?php _e('Les produits seront automatiquement synchronisés avec Pennylane lors de leur création ou mise à jour.', 'woo-pennylane'); ?>
+                        </p>
+                    </td>
+                </tr>
+
+                <!-- Section Synchronisation Clients -->
+                <tr>
+                    <th scope="row">
+                        <?php _e('Synchronisation Clients', 'woo-pennylane'); ?>
+                    </th>
+                    <td>
+                        <label>
+                            <input type="checkbox" 
+                                   name="woo_pennylane_auto_sync_customers" 
+                                   value="yes" 
+                                   <?php checked(get_option('woo_pennylane_auto_sync_customers'), 'yes'); ?>>
+                            <?php _e('Activer la synchronisation automatique des clients', 'woo-pennylane'); ?>
+                        </label>
+                        <p class="description">
+                            <?php _e('Les clients seront automatiquement synchronisés avec Pennylane lors de leur création ou mise à jour.', 'woo-pennylane'); ?>
                         </p>
                     </td>
                 </tr>

@@ -24,6 +24,10 @@ if (!defined('ABSPATH')) {
             <button type="button" class="button button-primary" id="analyze-customers">
                 <?php _e('Analyser les clients', 'woo-pennylane'); ?>
             </button>
+            
+            <button type="button" class="button" id="force-resync-customers">
+                <?php _e('Forcer la resynchronisation des clients', 'woo-pennylane'); ?>
+            </button>
         </div>
     </div>
 
@@ -67,5 +71,10 @@ if (!defined('ABSPATH')) {
             <h4><?php _e('Journal de synchronisation', 'woo-pennylane'); ?></h4>
             <div id="customer-sync-log-content"></div>
         </div>
+    </div>
+    
+    <!-- Boîte de dialogue de confirmation pour la resynchronisation -->
+    <div id="resync-confirmation-dialog" title="<?php _e('Confirmer la resynchronisation', 'woo-pennylane'); ?>" style="display:none;">
+        <p><?php _e('Cette action va forcer la resynchronisation de tous les clients déjà synchronisés avec Pennylane. Les données existantes seront mises à jour. Souhaitez-vous continuer ?', 'woo-pennylane'); ?></p>
     </div>
 </div>

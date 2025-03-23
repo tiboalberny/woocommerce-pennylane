@@ -3,7 +3,7 @@
  * Plugin Name: WooCommerce Pennylane Integration
  * Plugin URI: https://lespetitschaudrons.fr
  * Description: Intégration entre WooCommerce et Pennylane pour la synchronisation des factures, clients et produits
- * Version: 1.3.0
+ * Version: 1.4.0
  * Author: Tibo
  * Author URI: https://hostophoto.fr
  * License: GPL v2 or later
@@ -22,7 +22,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Définition des constantes
-define('WOO_PENNYLANE_VERSION', '1.3.0');
+define('WOO_PENNYLANE_VERSION', '1.4.0');
 define('WOO_PENNYLANE_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('WOO_PENNYLANE_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('WOO_PENNYLANE_PLUGIN_BASENAME', plugin_basename(__FILE__));
@@ -103,19 +103,21 @@ class WooPennylane {
             dirname(WOO_PENNYLANE_PLUGIN_BASENAME) . '/languages'
         );
     }
-
-    /**
-     * Charge les classes nécessaires
-     */
-    private function load_classes() {
+/**
+ * Charge les classes nécessaires
+ */
+private function load_classes() {
     // Chemins des fichiers
     $files = array(
+        'includes/class-woo-pennylane-logger.php',      // Logger en premier pour être disponible pour les autres classes
         'includes/class-woo-pennylane-settings.php',
         'includes/class-woo-pennylane-synchronizer.php',
         'includes/class-woo-pennylane-customer-sync.php',
         'includes/class-woo-pennylane-product-sync.php',
-        'includes/class-woo-pennylane-cron-sync.php',
-        'includes/class-woo-pennylane-sync-history.php', // Assurez-vous que ce fichier est inclus
+        'includes/class-woo-pennylane-user-profile.php',
+        'includes/class-woo-pennylane-guest-customer-sync.php',
+        'includes/class-woo-pennylane-customer-hooks.php',
+        'includes/class-woo-pennylane-api-client.php'
     );
     
     // Chargement des fichiers
@@ -124,6 +126,11 @@ class WooPennylane {
         if (file_exists($file_path)) {
             require_once $file_path;
         }
+    }
+    
+    // Vérification et création de la table de logs si elle n'existe pas
+    if (class_exists('WooPennylane_Logger') && !WooPennylane_Logger::is_history_module_ready()) {
+        WooPennylane_Logger::create_logs_table();
     }
     
     // Initialisation des classes
@@ -151,19 +158,73 @@ class WooPennylane {
         add_action('admin_notices', array($product_sync, 'bulk_action_admin_notice'));
     }
     
-    // Initialisation de la synchronisation CRON
-    if (class_exists('WooPennylane_Cron_Sync')) {
-        new WooPennylane_Cron_Sync();
+    // Ajout de colonnes aux listes d'utilisateurs
+    add_filter('manage_users_columns', array($this, 'add_pennylane_user_column'));
+    add_filter('manage_users_custom_column', array($this, 'render_pennylane_user_column'), 10, 3);
+}
+    
+    /**
+     * Ajoute une colonne Pennylane à la liste des utilisateurs
+     */
+    public function add_pennylane_user_column($columns) {
+        $columns['pennylane_sync'] = __('Pennylane', 'woo-pennylane');
+        return $columns;
     }
     
-    // Initialisation de l'historique
-    if (class_exists('WooPennylane_Sync_History')) {
-        global $woo_pennylane_sync_history;
-        $woo_pennylane_sync_history = new WooPennylane_Sync_History();
-    }
-}
-
     /**
+    * Affiche le bouton de synchronisation Pennylane dans la liste des utilisateurs
+    */
+    public function render_pennylane_user_column($value, $column_name, $user_id) {
+        if ($column_name !== 'pennylane_sync') {
+            return $value;
+        }
+        
+        $pennylane_id = get_user_meta($user_id, '_pennylane_customer_id', true);
+        $synced = get_user_meta($user_id, '_pennylane_synced', true);
+        $excluded = get_user_meta($user_id, '_pennylane_exclude', true);
+        
+        $output = '';
+        
+        // Si le client est exclu, afficher un message
+        if ($excluded === 'yes') {
+            $output = '<span class="pennylane-status excluded">' . __('Exclu', 'woo-pennylane') . '</span>';
+        } else {
+            // Déterminer le type de bouton à afficher
+            $button_text = '';
+            $button_class = 'sync-pennylane-customer button button-small';
+            
+            if ($synced === 'yes' && $pennylane_id) {
+                // Client déjà synchronisé
+                $button_text = __('Resynchroniser', 'woo-pennylane');
+                $button_class .= ' resync';
+                
+                // Afficher la dernière synchronisation
+                $last_sync = get_user_meta($user_id, '_pennylane_last_sync', true);
+                if ($last_sync) {
+                    $output .= '<span class="last-sync">' . sprintf(__('Dernière: %s', 'woo-pennylane'), 
+                        human_time_diff(strtotime($last_sync), current_time('timestamp'))) . '</span><br>';
+                }
+                
+                // Afficher l'ID Pennylane
+                $output .= '<span class="pennylane-id">ID: ' . esc_html($pennylane_id) . '</span><br>';
+            } else {
+                // Client pas encore synchronisé
+                $button_text = __('Synchroniser', 'woo-pennylane');
+                $button_class .= ' sync';
+            }
+            
+            // Créer le bouton avec l'icône appropriée
+            $output .= '<a href="#" class="' . esc_attr($button_class) . '" data-user-id="' . esc_attr($user_id) . '" data-nonce="' . wp_create_nonce('sync_customer_' . $user_id) . '">';
+            $output .= '<span class="dashicons dashicons-update"></span> ' . $button_text;
+            $output .= '</a>';
+            $output .= '<span class="spinner" style="float:none;margin:0 2px;"></span>';
+            $output .= '<span class="sync-result"></span>';
+        }
+        
+        return $output;
+    }
+
+   /**
      * Activation du plugin
      */
     public function activate() {
@@ -181,8 +242,19 @@ class WooPennylane {
             );
         }
 
-        // Crée les tables
-        $this->create_tables();
+        // Chargez d'abord le fichier de la classe Logger
+        $logger_file = WOO_PENNYLANE_PLUGIN_DIR . 'includes/class-woo-pennylane-logger.php';
+        if (file_exists($logger_file)) {
+            require_once $logger_file;
+        }
+
+        // Crée les tables si la classe existe
+        if (class_exists('WooPennylane_Logger')) {
+            WooPennylane_Logger::create_logs_table();
+        }
+        // Crée la table pour les clients invités
+         require_once WOO_PENNYLANE_PLUGIN_DIR . 'includes/class-woo-pennylane-guest-customer-sync.php';
+         WooPennylane_Guest_Customer_Sync::create_guest_sync_table();
 
         // Ajoute les options par défaut
         $this->add_default_options();
@@ -205,7 +277,7 @@ class WooPennylane {
         flush_rewrite_rules();
     }
 
-    /**
+     /**
      * Création des tables de base de données
      */
     private function create_tables() {
@@ -215,19 +287,27 @@ class WooPennylane {
         
         $sql = "CREATE TABLE IF NOT EXISTS {$wpdb->prefix}woo_pennylane_logs (
             id bigint(20) NOT NULL AUTO_INCREMENT,
-            order_id bigint(20) NOT NULL,
+            entity_id bigint(20) NOT NULL,
+            entity_type varchar(50) NOT NULL,
             status varchar(50) NOT NULL,
             message text NOT NULL,
             created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY  (id),
-            KEY order_id (order_id),
+            KEY entity_id (entity_id),
+            KEY entity_type (entity_type),
             KEY status (status)
         ) $charset_collate;";
         
         require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
         dbDelta($sql);
+        
+        // Vérifie si la table a été créée avec succès
+        $table_name = $wpdb->prefix . 'woo_pennylane_logs';
+        if ($wpdb->get_var("SHOW TABLES LIKE '$table_name'") != $table_name) {
+            // La table n'existe pas, enregistre l'erreur
+            error_log('Impossible de créer la table ' . $table_name);
+        }
     }
-
     /**
      * Ajout des options par défaut
      */
@@ -240,6 +320,7 @@ class WooPennylane {
             'woo_pennylane_auto_sync' => 'yes',
             'woo_pennylane_sync_status' => array('completed'),
             'woo_pennylane_auto_sync_products' => 'no',
+            'woo_pennylane_auto_sync_customers' => 'no',
             'woo_pennylane_product_ledger_account' => '707' // Compte de vente de marchandises par défaut
         );
 
@@ -259,7 +340,8 @@ class WooPennylane {
                 <p>
                     <?php
                     echo sprintf(
-                        __('Merci d\'avoir installé WooCommerce Pennylane Integration. <a href="%s">Configurez le plugin</a> pour commencer à synchroniser vos commandes.', 'woo-pennylane'),
+                        __('Merci d\'avoir installé WooCommerce Pennylane Integration v%s. <a href="%s">Configurez le plugin</a> pour commencer à synchroniser vos données.', 'woo-pennylane'),
+                        WOO_PENNYLANE_VERSION,
                         admin_url('admin.php?page=woo-pennylane-settings')
                     );
                     ?>

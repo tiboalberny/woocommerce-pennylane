@@ -353,3 +353,76 @@ button.button-primary {
     width: 250px;
     background: #f0f0f1;
 }
+
+/* Styles pour la colonne Pennylane dans la liste des utilisateurs */
+.column-pennylane_sync {
+    width: 150px;
+}
+
+/* Styles pour les informations de statut */
+.column-pennylane_sync .pennylane-status {
+    display: inline-block;
+    padding: 2px 5px;
+    border-radius: 3px;
+    font-size: 11px;
+    margin-bottom: 5px;
+}
+
+.column-pennylane_sync .pennylane-status.excluded {
+    background-color: #f1f1f1;
+    color: #666;
+}
+
+.column-pennylane_sync .last-sync,
+.column-pennylane_sync .pennylane-id {
+    display: block;
+    font-size: 11px;
+    color: #666;
+    margin-bottom: 3px;
+}
+
+/* Styles pour les boutons */
+.column-pennylane_sync .sync-pennylane-customer {
+    display: inline-flex;
+    align-items: center;
+    margin-top: 3px;
+    padding: 0 8px;
+    height: 26px;
+    font-size: 12px;
+}
+
+.column-pennylane_sync .sync-pennylane-customer .dashicons {
+    font-size: 16px;
+    width: 16px;
+    height: 16px;
+    margin-right: 3px;
+}
+
+.column-pennylane_sync .sync-pennylane-customer.sync {
+    background-color: #2271b1;
+    color: #fff;
+    border-color: #135e96;
+}
+
+.column-pennylane_sync .sync-pennylane-customer.resync {
+    background-color: #f0f0f1;
+    color: #2c3338;
+    border-color: #c5c5c5;
+}
+
+.column-pennylane_sync .spinner {
+    margin-top: 5px;
+    float: none;
+    display: inline-block;
+    visibility: hidden;
+}
+
+.column-pennylane_sync .spinner.is-active {
+    visibility: visible;
+}
+
+.column-pennylane_sync .sync-result {
+    display: block;
+    margin-top: 5px;
+    font-size: 12px;
+}
