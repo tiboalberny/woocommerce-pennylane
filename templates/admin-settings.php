@@ -216,7 +216,33 @@ if (!current_user_can('manage_woocommerce')) {
                         </p>
                     </td>
                 </tr>
-
+                
+                <tr>
+                    <th scope="row">
+                        <label for="woo_pennylane_invoice_creation_status">
+                            <?php _e('Statut Création Facture', 'woo-pennylane'); ?>
+                        </label>
+                    </th>
+                    <td>
+                        <select id="woo_pennylane_invoice_creation_status" name="woo_pennylane_invoice_creation_status">
+                            <?php
+                            // Récupère la valeur actuelle de l'option, avec 'draft' comme défaut
+                            $current_status = get_option('woo_pennylane_invoice_creation_status', 'draft');
+                            ?>
+                            <option value="draft" <?php selected($current_status, 'draft'); ?>>
+                                <?php _e('Créer comme Brouillon (Draft)', 'woo-pennylane'); ?>
+                            </option>
+                            <option value="final" <?php selected($current_status, 'final'); ?>>
+                                <?php _e('Créer comme Facture Finale', 'woo-pennylane'); ?>
+                            </option>
+                        </select>
+                        <p class="description">
+                            <?php _e('Choisissez si les factures doivent être créées comme brouillons (pour vérification dans Pennylane) ou directement comme factures finales.', 'woo-pennylane'); ?>
+                            <br><strong><?php _e('Attention:', 'woo-pennylane'); ?></strong> <?php _e('La création en "Final" est irréversible dans Pennylane.', 'woo-pennylane'); ?>
+                        </p>
+                    </td>
+                </tr>
+                <!-- END: Nouveau Champ Statut Facture -->
                 <!-- Section Debug -->
                 <tr>
                     <th scope="row" colspan="2">

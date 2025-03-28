@@ -79,6 +79,10 @@ class WooPennylane_Synchronizer {
                 // Sauvegarde l'ID Pennylane
                 if (isset($response['id'])) {
                     update_post_meta($order_id, '_pennylane_invoice_id', $response['id']);
+                      //  Sauvegarder le statut envoyé
+                    $sent_status = $invoice_data['status'] ?? 'unknown'; // Récupérer le statut depuis $invoice_data
+                    update_post_meta($order_id, '_pennylane_invoice_status_sent', $sent_status);
+                
                 }
             }
 
@@ -150,90 +154,216 @@ class WooPennylane_Synchronizer {
     }
 
     /**
-     * Prépare les données de la facture au format Pennylane
+     * Prépare les données de la facture au format Pennylane V2
      *
      * @param WC_Order $order Commande WooCommerce
      * @return array Données de la facture formatées
+     * @throws Exception Si le client ne peut pas être déterminé ou synchronisé
      */
     private function prepare_invoice_data($order) {
-        // Information client
-        $customer = array(
-            'name' => $order->get_billing_first_name() . ' ' . $order->get_billing_last_name(),
-            'email' => $order->get_billing_email(),
-            'address' => array(
-                'street' => $order->get_billing_address_1(),
-                'street_line_2' => $order->get_billing_address_2(),
-                'postal_code' => $order->get_billing_postcode(),
-                'city' => $order->get_billing_city(),
-                'country' => $order->get_billing_country()
-            )
-        );
+        $order_id = $order->get_id();
 
-        // Lignes de la facture
-        $line_items = array();
-        
+        // --- AJOUT : Lire le statut de création souhaité ---
+        $invoice_status_pref = get_option('woo_pennylane_invoice_creation_status', 'draft'); // Lire l'option, défaut 'draft'
+
+        // --- 1. Gestion du Client ---
+        $pennylane_customer_id = null;
+        $customer_id_wc = $order->get_customer_id(); // ID utilisateur WC (0 si invité)
+
+        if ($customer_id_wc > 0) {
+            // Client enregistré
+            $pennylane_customer_id = get_user_meta($customer_id_wc, '_pennylane_customer_id', true);
+            // Si non trouvé, essayer de le synchroniser maintenant
+            if (!$pennylane_customer_id) {
+                 try {
+                     // Assurer que la classe est chargée
+                     if (!class_exists('WooPennylane_Customer_Sync')) {
+                         require_once WOO_PENNYLANE_PLUGIN_DIR . 'includes/class-woo-pennylane-customer-sync.php';
+                     }
+                     $customer_sync = new WooPennylane_Customer_Sync();
+                     $customer_sync->sync_customer($customer_id_wc); // Tente la synchronisation
+                     $pennylane_customer_id = get_user_meta($customer_id_wc, '_pennylane_customer_id', true); // Re-vérifie l'ID
+                     if (!$pennylane_customer_id) {
+                         // Si toujours pas d'ID après la tentative, lancer une erreur claire
+                         throw new Exception(sprintf(__('Impossible de synchroniser ou récupérer l\'ID Pennylane pour le client enregistré #%d.', 'woo-pennylane'), $customer_id_wc));
+                     }
+                 } catch (Exception $e) {
+                     // Relancer l'exception avec plus de contexte
+                     throw new Exception(sprintf(__('Erreur lors de la synchronisation du client enregistré #%d requis pour la facture: %s', 'woo-pennylane'), $customer_id_wc, $e->getMessage()));
+                 }
+            }
+        } else {
+            // Client invité
+            $guest_email = $order->get_billing_email();
+            if (empty($guest_email)) {
+                throw new Exception(__('L\'email de facturation est manquant pour ce client invité.', 'woo-pennylane'));
+            }
+            // Rechercher dans la table des invités
+            global $wpdb;
+            $guest_table = $wpdb->prefix . 'woo_pennylane_guest_sync';
+            $guest_info = $wpdb->get_row($wpdb->prepare("SELECT pennylane_id FROM $guest_table WHERE email = %s AND synced = 1", $guest_email));
+            $pennylane_customer_id = $guest_info ? $guest_info->pennylane_id : null;
+
+            // Si non trouvé, essayer de le synchroniser maintenant
+            if (!$pennylane_customer_id) {
+                 try {
+                     // Assurer que la classe est chargée
+                     if (!class_exists('WooPennylane_Guest_Customer_Sync')) {
+                         require_once WOO_PENNYLANE_PLUGIN_DIR . 'includes/class-woo-pennylane-guest-customer-sync.php';
+                     }
+                     $guest_sync = new WooPennylane_Guest_Customer_Sync();
+                     $guest_sync->sync_guest_customer($guest_email); // Tente la synchro
+                     // Re-vérifier après synchro
+                     $guest_info = $wpdb->get_row($wpdb->prepare("SELECT pennylane_id FROM $guest_table WHERE email = %s AND synced = 1", $guest_email));
+                     $pennylane_customer_id = $guest_info ? $guest_info->pennylane_id : null;
+                     if (!$pennylane_customer_id) {
+                         // Si toujours pas d'ID après la tentative, lancer une erreur claire
+                         throw new Exception(sprintf(__('Impossible de synchroniser ou récupérer l\'ID Pennylane pour le client invité (%s).', 'woo-pennylane'), $guest_email));
+                     }
+                 } catch (Exception $e) {
+                      // Relancer l'exception avec plus de contexte
+                      throw new Exception(sprintf(__('Erreur lors de la synchronisation du client invité (%s) requis pour la facture: %s', 'woo-pennylane'), $guest_email, $e->getMessage()));
+                 }
+            }
+        }
+
+        // Vérification finale de l'ID client Pennylane
+        if (empty($pennylane_customer_id)) {
+             throw new Exception(__('Impossible de déterminer l\'ID client Pennylane pour cette commande après toutes les tentatives.', 'woo-pennylane'));
+        }
+
+
+        // --- 2. Lignes de la facture ---
+        $invoice_lines = array();
+
         // Produits
-        foreach ($order->get_items() as $item) {
+        foreach ($order->get_items() as $item_id => $item) {
             $product = $item->get_product();
-            $unit_price = $order->get_item_total($item, false, false);
-            $tax_rate = $this->get_item_tax_rate($item);
+            $quantity = $item->get_quantity();
+            if ($quantity <= 0) continue; // Ignorer les lignes avec quantité nulle ou négative?
 
-            $line_items[] = array(
-                'description' => $item->get_name(),
-                'quantity' => $item->get_quantity(),
-                'unit_price_without_vat' => $unit_price,
-                'vat_rate' => $tax_rate,
-                'product_id' => $product ? $product->get_id() : null,
-                'sku' => $product ? $product->get_sku() : '',
-                'category' => 'GOODS'
+            // Prix unitaire HT = Total HT de la ligne / Quantité
+            $line_subtotal_excl_tax = $item->get_subtotal(); // Total HT de la ligne
+            $unit_price_excl_tax = wc_format_decimal($line_subtotal_excl_tax / $quantity, wc_get_price_decimals()); // Prix unitaire HT
+
+            // Taux de TVA
+            $vat_rate = $this->get_item_tax_rate($item); // Récupère le taux en pourcentage (ex: 20.0)
+            $vat_rate_formatted = 'FR_' . (int)round($vat_rate * 10); // Format Pennylane (Ex: FR_200). Arrondir pour être sûr.
+
+            // ID Produit Pennylane (si synchro produit active)
+            $pennylane_product_id = $product ? get_post_meta($product->get_id(), '_pennylane_product_id', true) : null;
+
+            $line_data = array(
+                'label'                  => $item->get_name(), // Nom de l'item
+                'quantity'               => $quantity,
+                'price_before_tax'       => (float) $unit_price_excl_tax,
+                'vat_rate'               => $vat_rate_formatted, // Ex: FR_200
             );
+
+            // Ajouter l'ID produit Pennylane seulement s'il existe
+            if (!empty($pennylane_product_id)) {
+                 $line_data['product_id'] = $pennylane_product_id;
+            } else {
+                 // Si pas d'ID Pennylane, on peut envoyer la référence SKU ou ID WC comme référence produit externe?
+                 // A vérifier si l'API le permet/requiert dans ce cas.
+                 $sku = $product ? $product->get_sku() : null;
+                 if (!empty($sku)) {
+                     $line_data['reference'] = $sku; // Envoyer SKU si pas d'ID Pennylane
+                 }
+                 // $line_data['external_product_reference'] = $product ? (string) $product->get_id() : null; // Optionnel
+            }
+
+            $invoice_lines[] = $line_data;
         }
 
         // Frais de livraison
-        if ($order->get_shipping_total() > 0) {
-            $shipping_tax_rate = $this->get_shipping_tax_rate($order);
-            $line_items[] = array(
-                'description' => __('Frais de livraison', 'woo-pennylane'),
-                'quantity' => 1,
-                'unit_price_without_vat' => $order->get_shipping_total(),
-                'vat_rate' => $shipping_tax_rate,
-                'category' => 'SHIPPING'
-            );
-        }
-        
-        // Remises
-        if ($order->get_discount_total() > 0) {
-            $line_items[] = array(
-                'description' => __('Remise', 'woo-pennylane'),
-                'quantity' => 1,
-                'unit_price_without_vat' => -1 * $order->get_discount_total(),
-                'vat_rate' => 0,
-                'category' => 'DISCOUNT'
+        if ((float)$order->get_shipping_total() > 0) {
+            $shipping_total_excl_tax = (float)$order->get_shipping_total();
+            $shipping_vat_rate = $this->get_shipping_tax_rate($order); // Taux en pourcentage
+            $shipping_vat_rate_formatted = 'FR_' . (int)round($shipping_vat_rate * 10); // Format Pennylane
+
+            $invoice_lines[] = array(
+                'label'                 => __('Frais de livraison', 'woo-pennylane'),
+                'quantity'              => 1,
+                'price_before_tax'      => $shipping_total_excl_tax,
+                'vat_rate'              => $shipping_vat_rate_formatted,
             );
         }
 
-        // Données de la facture
+        // Frais Additionnels
+        foreach ($order->get_fees() as $fee_id => $fee) {
+             if ((float)$fee->get_total() == 0) continue; // Ignorer frais nuls
+
+            $fee_total_excl_tax = (float)$fee->get_total();
+            $fee_tax_total = (float)$fee->get_total_tax();
+            // Calculer le taux de TVA pour les frais
+            $fee_vat_rate = ($fee_total_excl_tax != 0) ? round(($fee_tax_total / abs($fee_total_excl_tax)) * 100, wc_get_rounding_precision() - 2) : 0;
+            $fee_vat_rate_formatted = 'FR_' . (int)round($fee_vat_rate * 10); // Format Pennylane
+
+             $invoice_lines[] = array(
+                'label'                 => $fee->get_name(),
+                'quantity'              => 1,
+                'price_before_tax'      => $fee_total_excl_tax, // Peut être négatif
+                'vat_rate'              => $fee_vat_rate_formatted,
+            );
+        }
+
+        // Remises (représentées comme des lignes négatives)
+        // Attention: S'assurer que c'est bien la méthode attendue par Pennylane.
+        if ($order->get_total_discount(false) > 0) { // Remise HT
+            $discount_total_excl_tax = -abs((float)$order->get_total_discount(false));
+
+            $invoice_lines[] = array(
+                'label'                 => __('Remise', 'woo-pennylane'),
+                'quantity'              => 1,
+                'price_before_tax'      => $discount_total_excl_tax,
+                // Hypothèse: la remise n'a pas de TVA propre mais réduit la base taxable globale.
+                // Mettre 0% ou le taux moyen? Mettre 0% est plus simple/prudent. A VERIFIER avec Pennylane.
+                'vat_rate'              => 'FR_0',
+            );
+        }
+
+
+        // --- 4. Construction des données finales pour l'API ---
+        // Structure basée sur la documentation API V2 de Pennylane (à vérifier attentivement)
         $invoice_data = array(
-            'customer' => $customer,
-            'date' => $order->get_date_created()->format('Y-m-d'),
-            'currency' => $order->get_currency(),
-            'ref' => $order->get_order_number(),
-            'items' => $line_items,
-            'payment_method' => $order->get_payment_method_title(),
-            'notes' => $order->get_customer_note()
+            'customer_id'           => $pennylane_customer_id, // ID du client Pennylane (OBLIGATOIRE)
+            'currency'              => $order->get_currency(), // Devise (OBLIGATOIRE)
+            'issued_on'             => $order->get_date_paid() ? $order->get_date_paid()->format('Y-m-d') : $order->get_date_created()->format('Y-m-d'), // Date d'émission (OBLIGATOIRE)
+            'label'                 => sprintf(__('Commande WooCommerce #%s', 'woo-pennylane'), $order->get_order_number()), // Libellé interne (OBLIGATOIRE)
+            'external_reference'    => (string)$order_id, // Référence externe (ID commande WC) (Recommandé)
+            'invoice_lines_attributes' => $invoice_lines, // Lignes de la facture (OBLIGATOIRE, au moins une ligne)
+
+            // --- AJOUT du statut basé sur le réglage ---
+            // VÉRIFIER LE NOM EXACT DU CHAMP ('status', 'state', 'is_draft' ?) ET LES VALEURS ('draft', 'final', true/false) DANS LA DOC API V2
+            'status'                => $invoice_status_pref, // 'draft' ou 'final' lu depuis les options
+
+            // --- Champs Optionnels (à vérifier si utiles/corrects) ---
+             'notes'                 => $order->get_customer_note(), // Notes client
+             'payment_method'        => $order->get_payment_method_title(), // Méthode de paiement
+             'metadata'              => [ // Métadonnées personnalisées
+                 'woocommerce_order_id' => $order_id,
+                 'woocommerce_order_number' => $order->get_order_number(),
+                 'payment_via' => $order->get_payment_method() // ID technique du moyen de paiement
+             ]
+             // 'due_on'                => ??? // Date d'échéance - A calculer si nécessaire (ex: date_emission + 30 jours)
+             // 'invoice_number'       => ??? // Si Pennylane ne le génère pas automatiquement pour les factures finales ?
         );
-        
-        // Journal code et compte comptable
+
+        // Ajouter le code journal et numéro de compte si configurés dans les options
+        // Vérifier la structure exacte attendue par l'API V2 (ID? Code? Objet?)
         $journal_code = get_option('woo_pennylane_journal_code', '');
         if (!empty($journal_code)) {
-            $invoice_data['journal_code'] = $journal_code;
-        }
-        
-        $account_number = get_option('woo_pennylane_account_number', '');
-        if (!empty($account_number)) {
-            $invoice_data['account_number'] = $account_number;
+            // Exemple hypothétique : $invoice_data['journal_entry_attributes']['journal_code'] = $journal_code;
         }
 
+        $account_number = get_option('woo_pennylane_account_number', ''); // Compte client par défaut ?
+        if (!empty($account_number)) {
+             // Exemple hypothétique : $invoice_data['customer_ledger_account_id'] = $account_number;
+        }
+
+
+        // Appliquer un filtre pour permettre des modifications finales juste avant l'envoi
         return apply_filters('woo_pennylane_invoice_data', $invoice_data, $order);
     }
 

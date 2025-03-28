@@ -21,12 +21,9 @@ class WooPennylane_Settings {
             add_action('wp_ajax_woo_pennylane_get_synced_customers', array($this, 'get_synced_customers'));
             add_action('wp_ajax_woo_pennylane_sync_single_customer', array($this, 'sync_single_customer'));
             add_action('wp_ajax_woo_pennylane_create_logs_table', array($this, 'create_logs_table_ajax'));
-            
-            // Nouvelles actions AJAX pour les produits
             add_action('wp_ajax_woo_pennylane_analyze_products', array($this, 'analyze_products'));
             add_action('wp_ajax_woo_pennylane_sync_products', array($this, 'sync_products'));
             add_action('wp_ajax_woo_pennylane_sync_single_product', array($this, 'sync_single_product'));
-            // Actions AJAX pour les clients invités
             add_action('wp_ajax_woo_pennylane_analyze_guest_customers', array($this, 'analyze_guest_customers'));
             add_action('wp_ajax_woo_pennylane_sync_guest_customers', array($this, 'sync_guest_customers'));
         }
@@ -53,6 +50,12 @@ class WooPennylane_Settings {
         register_setting('woo_pennylane_settings', 'woo_pennylane_auto_sync_products');
         register_setting('woo_pennylane_settings', 'woo_pennylane_product_ledger_account');
         register_setting('woo_pennylane_settings', 'woo_pennylane_auto_sync_customers');
+        register_setting('woo_pennylane_settings', 'woo_pennylane_invoice_creation_status');
+        register_setting('woo_pennylane_settings', 'woo_pennylane_invoice_creation_status', array(
+            'type' => 'string',
+            'sanitize_callback' => array($this, 'sanitize_invoice_status'),
+            'default' => 'draft', // Définit la valeur par défaut
+        ));
     }
 
     public function enqueue_admin_scripts($hook) {
@@ -163,6 +166,21 @@ class WooPennylane_Settings {
         );
     }
 }
+    /**
+     * Sanitize the selected invoice creation status. Ensures it's either 'draft' or 'final'.
+     *
+     * @param string|mixed $input The value from the settings page.
+     * @return string Sanitized status ('draft' or 'final').
+     */
+    public function sanitize_invoice_status( $input ) {
+        $status = sanitize_key( $input );
+        if ( in_array( $status, array( 'draft', 'final' ) ) ) {
+            return $status;
+        }
+        // Si la valeur n'est ni 'draft' ni 'final', retourner la valeur par défaut 'draft'.
+        return 'draft';
+    }
+    
     public function render_admin_page() {
         $this->active_tab = isset($_GET['tab']) ? sanitize_key($_GET['tab']) : 'settings';
         ?>
