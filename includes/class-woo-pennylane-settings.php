@@ -56,74 +56,113 @@ class WooPennylane_Settings {
     }
 
     public function enqueue_admin_scripts($hook) {
-        // Enqueue les scripts uniquement sur les pages nécessaires
-        $pennylane_pages = array(
-            'woocommerce_page_woo-pennylane-settings',
-            'users.php'
-        );
-        
-        if (!in_array($hook, $pennylane_pages)) {
-            return;
+    // Déterminer les pages où nous devons charger nos ressources
+    $pennylane_page = 'woocommerce_page_woo-pennylane-settings';
+    $is_product_page = false;
+    $is_order_page = false;
+    
+    // Vérifier si nous sommes sur une page de produits
+    if (in_array($hook, array('post.php', 'post-new.php'))) {
+        global $post;
+        if ($post && $post->post_type === 'product') {
+            $is_product_page = true;
+        } elseif ($post && $post->post_type === 'shop_order') {
+            $is_order_page = true;
         }
-        
-        // Enqueue les styles toujours
+    }
+    
+    // Vérifier si nous sommes sur la liste des produits ou commandes
+    if ($hook === 'edit.php') {
+        $post_type = isset($_GET['post_type']) ? sanitize_key($_GET['post_type']) : '';
+        if ($post_type === 'product') {
+            $is_product_page = true;
+        } elseif ($post_type === 'shop_order') {
+            $is_order_page = true;
+        }
+    }
+    
+    // Si nous ne sommes pas sur une page pertinente, sortir
+    if ($hook !== $pennylane_page && !$is_product_page && !$is_order_page) {
+        return;
+    }
+
+    // Enregistrer et charger les styles CSS communs
+    wp_enqueue_style(
+        'woo-pennylane-admin',
+        WOO_PENNYLANE_PLUGIN_URL . 'assets/css/admin.css',
+        array(),
+        WOO_PENNYLANE_VERSION
+    );
+    
+    // Charger le CSS spécifique aux produits
+    if ($is_product_page || $hook === $pennylane_page) {
         wp_enqueue_style(
-            'woo-pennylane-admin',
-            WOO_PENNYLANE_PLUGIN_URL . 'assets/css/admin.css',
+            'woo-pennylane-products',
+            WOO_PENNYLANE_PLUGIN_URL . 'assets/css/products.css',
+            array('dashicons'),
+            WOO_PENNYLANE_VERSION
+        );
+    }
+    
+    // Charger les dépendances jQuery UI pour les datepickers
+    if ($hook === $pennylane_page) {
+        wp_enqueue_script('jquery-ui-datepicker');
+        wp_enqueue_style(
+            'jquery-ui-style',
+            WOO_PENNYLANE_PLUGIN_URL . 'assets/css/jquery-ui.min.css',
             array(),
             WOO_PENNYLANE_VERSION
         );
-        
-        // Paramètres JavaScript communs
-        $js_params = array(
-            'ajaxUrl' => admin_url('admin-ajax.php'),
-            'nonce' => wp_create_nonce('woo_pennylane_nonce'),
-            'debug' => true,
-            'i18n' => array(
-                'syncing' => __('Synchronisation...', 'woo-pennylane'),
-                'synced' => __('Synchronisé', 'woo-pennylane'),
-                'pennylane_id' => __('ID Pennylane:', 'woo-pennylane'),
-                'last_synced' => __('Dernière synchronisation:', 'woo-pennylane'),
-                'sync_completed' => __('Synchronisation terminée', 'woo-pennylane'),
-                'sync_error' => __('Erreur de synchronisation', 'woo-pennylane'),
-                'confirm_resync' => __('Êtes-vous sûr de vouloir resynchroniser ce client?', 'woo-pennylane')
-            )
-        );
-        
-        // Enqueue le script principal sur toutes les pages Pennylane
-        wp_enqueue_script(
-            'woo-pennylane-admin',
-            WOO_PENNYLANE_PLUGIN_URL . 'assets/js/admin.js',
-            array('jquery'),
-            WOO_PENNYLANE_VERSION,
-            true
-        );
-        
-        // Passer les paramètres au script principal
-        wp_localize_script(
-            'woo-pennylane-admin',
-            'wooPennylaneParams',
-            $js_params
-        );
-        
-        // Enqueue et localiser un script spécifique pour la page des utilisateurs
-        if ($hook === 'users.php') {
-            wp_enqueue_script(
-                'woo-pennylane-user-sync',
-                WOO_PENNYLANE_PLUGIN_URL . 'assets/js/user-sync.js',
-                array('jquery'),
-                WOO_PENNYLANE_VERSION,
-                true
-            );
-            
-            wp_localize_script(
-                'woo-pennylane-user-sync',
-                'wooPennylaneUserParams',
-                $js_params
-            );
-        }
     }
 
+    // Enregistrer et charger le script JavaScript principal
+    wp_enqueue_script(
+        'woo-pennylane-admin',
+        WOO_PENNYLANE_PLUGIN_URL . 'assets/js/admin.js',
+        array('jquery'),
+        WOO_PENNYLANE_VERSION,
+        true
+    );
+
+    // Préparer les paramètres et traductions pour JavaScript
+    $params = array(
+        'ajaxUrl' => admin_url('admin-ajax.php'),
+        'nonce' => wp_create_nonce('woo_pennylane_nonce'),
+        'debug' => get_option('woo_pennylane_debug_mode', 'no') === 'yes',
+        'i18n' => array(
+            'syncing' => __('Synchronisation...', 'woo-pennylane'),
+            'synced' => __('Synchronisé', 'woo-pennylane'),
+            'pennylane_id' => __('ID Pennylane:', 'woo-pennylane'),
+            'last_synced' => __('Dernière synchronisation:', 'woo-pennylane'),
+            'sync_completed' => __('Synchronisation terminée', 'woo-pennylane'),
+            'sync_error' => __('Erreur de synchronisation', 'woo-pennylane'),
+            'confirm_sync_all' => __('Êtes-vous sûr de vouloir synchroniser tous les produits sélectionnés ? Cette opération peut prendre du temps.', 'woo-pennylane'),
+            'confirm_exclude' => __('Êtes-vous sûr de vouloir exclure ce produit de la synchronisation ?', 'woo-pennylane'),
+            'ago' => __('il y a', 'woo-pennylane'),
+            'confirm_sync' => __('Êtes-vous sûr de vouloir synchroniser ce produit avec Pennylane ?', 'woo-pennylane')
+        ),
+        'urls' => array(
+            'settings' => admin_url('admin.php?page=woo-pennylane-settings'),
+            'products' => admin_url('admin.php?page=woo-pennylane-settings&tab=products'),
+            'customers' => admin_url('admin.php?page=woo-pennylane-settings&tab=customers'),
+            'sync' => admin_url('admin.php?page=woo-pennylane-settings&tab=sync')
+        )
+    );
+    
+    wp_localize_script(
+        'woo-pennylane-admin',
+        'wooPennylaneParams',
+        $params
+    );
+    
+    // Ajouter un script inline pour déboguer en mode debug
+    if (get_option('woo_pennylane_debug_mode', 'no') === 'yes') {
+        wp_add_inline_script(
+            'woo-pennylane-admin',
+            'console.log("WooPennylane: Page ' . esc_js($hook) . ' chargée avec les paramètres", wooPennylaneParams);'
+        );
+    }
+}
     public function render_admin_page() {
         $this->active_tab = isset($_GET['tab']) ? sanitize_key($_GET['tab']) : 'settings';
         ?>

@@ -1,0 +1,97 @@
+/* Styles pour la colonne Pennylane dans la liste de produits */
+.pennylane-column-content {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.pennylane-status {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.pennylane-status.synced {
+    color: #46b450; /* Vert WordPress */
+}
+
+.pennylane-status.error {
+    color: #dc3232; /* Rouge WordPress */
+}
+
+.pennylane-status.excluded {
+    color: #999; /* Gris */
+}
+
+.pennylane-status.not-synced {
+    color: #ffb900; /* Jaune WordPress */
+}
+
+.pennylane-actions {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.pennylane-actions .spinner {
+    float: none;
+    margin: 0;
+    visibility: hidden;
+}
+
+.pennylane-actions .spinner.is-active {
+    visibility: visible;
+}
+
+.error-details {
+    cursor: help;
+}
+
+.pennylane-sync-product .dashicons {
+    font-size: 14px;
+    width: 14px;
+    height: 14px;
+    line-height: 1.3;
+    margin-right: 2px;
+}
+
+/* Styles pour les notifications temporaires dans la colonne */
+.pennylane-column-content .notice {
+    margin: 5px 0;
+    padding: 5px;
+}
+
+/* Styles pour la métabox de synchronisation Pennylane */
+.pennylane-product-sync-box {
+    margin-bottom: 10px;
+}
+
+.pennylane-product-sync-box .pennylane-synced {
+    color: #46b450;
+    font-weight: 600;
+}
+
+.pennylane-product-sync-box .pennylane-not-synced {
+    color: #ffb900;
+    font-weight: 600;
+}
+
+.pennylane-product-sync-box .pennylane-sync-error {
+    border-left: 4px solid #dc3232;
+    padding-left: 8px;
+    margin: 10px 0;
+}
+
+.pennylane-product-sync-box .notice {
+    margin: 10px 0 5px;
+}
+
+/* Animation de rotation pour l'icône d'actualisation */
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.pennylane-sync-product:disabled .dashicons-update {
+    animation: spin 2s linear infinite;
+}

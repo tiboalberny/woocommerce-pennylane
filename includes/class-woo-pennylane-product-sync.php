@@ -144,12 +144,14 @@ class WooPennylane_Product_Sync {
         // Récupération du prix HT
         $price_before_tax = (float) $product->get_regular_price();
         
+        // Si le prix régulier est vide, utiliser le prix normal
+        if (empty($price_before_tax) || $price_before_tax === '') {
+            $price_before_tax = (float) $product->get_price();
+        }
+        
         // Récupération du taux de TVA
         $vat_rate = $this->get_product_tax_rate($product);
         $vat_rate_formatted = $this->format_vat_rate($vat_rate); // "FR_200" pour 20%
-        
-        // Calcul du prix TTC si disponible, sinon calculé
-        $price = wc_get_price_including_tax($product);
         
         // Préparation des données selon le format requis
         $product_data = array(
@@ -158,17 +160,16 @@ class WooPennylane_Product_Sync {
             'external_reference' => (string) $product->get_id(), // ID WooCommerce comme référence externe
             'price_before_tax' => $price_before_tax,
             'vat_rate' => $vat_rate_formatted,
-            'price' => $price,
             'unit' => 'piece', // Par défaut, à adapter selon vos besoins
             'currency' => get_woocommerce_currency(),
             'reference' => $product->get_sku() ? $product->get_sku() : 'WC-' . $product->get_id()
         );
         
         // Ajout du compte comptable si configuré
-        $ledger_account_id = get_option('woo_pennylane_product_ledger_account', 0);
-        if ($ledger_account_id) {
+        $ledger_account_id = get_option('woo_pennylane_product_ledger_account', '');
+        if (!empty($ledger_account_id)) {
             $product_data['ledger_account'] = array(
-                'id' => (int) $ledger_account_id
+                'id' => $ledger_account_id
             );
         }
         
@@ -457,38 +458,67 @@ class WooPennylane_Product_Sync {
     }
 
     /**
-     * Affiche le contenu de la colonne personnalisée
-     */
-    public function render_product_list_column($column, $post_id) {
-        if ($column !== 'pennylane_sync') {
-            return;
-        }
-        
-        $pennylane_id = get_post_meta($post_id, '_pennylane_product_id', true);
-        $synced = get_post_meta($post_id, '_pennylane_product_synced', true);
-        $excluded = get_post_meta($post_id, '_pennylane_product_exclude', true);
-        
-        if ($excluded === 'yes') {
-            echo '<span class="dashicons dashicons-no-alt" title="' . esc_attr__('Exclu de la synchronisation', 'woo-pennylane') . '"></span>';
-        } elseif ($synced === 'yes' && $pennylane_id) {
-            echo '<span class="dashicons dashicons-yes" title="' . esc_attr__('Synchronisé', 'woo-pennylane') . '"></span>';
+         * Affiche le contenu de la colonne personnalisée de manière améliorée
+         */
+        public function render_product_list_column($column, $post_id) {
+            if ($column !== 'pennylane_sync') {
+                return;
+            }
             
+            $pennylane_id = get_post_meta($post_id, '_pennylane_product_id', true);
+            $synced = get_post_meta($post_id, '_pennylane_product_synced', true);
+            $excluded = get_post_meta($post_id, '_pennylane_product_exclude', true);
             $last_sync = get_post_meta($post_id, '_pennylane_product_last_sync', true);
-            if ($last_sync) {
-                echo ' <span title="' . esc_attr($last_sync) . '">' . esc_html(human_time_diff(strtotime($last_sync), current_time('timestamp'))) . '</span>';
-            }
-        } else {
             $error = get_post_meta($post_id, '_pennylane_product_sync_error', true);
-            if ($error) {
-                echo '<span class="dashicons dashicons-warning" title="' . esc_attr($error) . '"></span>';
+            
+            echo '<div class="pennylane-column-content">';
+            
+            // Affichage du statut
+            if ($excluded === 'yes') {
+                echo '<span class="pennylane-status excluded">';
+                echo '<span class="dashicons dashicons-no-alt"></span> ';
+                echo esc_html__('Exclu', 'woo-pennylane');
+                echo '</span>';
+            } elseif ($synced === 'yes' && $pennylane_id) {
+                echo '<span class="pennylane-status synced">';
+                echo '<span class="dashicons dashicons-yes"></span> ';
+                echo esc_html__('Synchronisé', 'woo-pennylane');
+                
+                if ($last_sync) {
+                    $time_diff = human_time_diff(strtotime($last_sync), current_time('timestamp'));
+                    echo ' <span class="sync-time" title="' . esc_attr($last_sync) . '">(' . esc_html($time_diff) . ')</span>';
+                }
+                echo '</span>';
             } else {
-                echo '<span class="dashicons dashicons-minus" title="' . esc_attr__('Non synchronisé', 'woo-pennylane') . '"></span>';
+                if ($error) {
+                    echo '<span class="pennylane-status error">';
+                    echo '<span class="dashicons dashicons-warning"></span> ';
+                    echo esc_html__('Erreur', 'woo-pennylane');
+                    echo '<span class="error-details" title="' . esc_attr($error) . '">';
+                    echo '<span class="dashicons dashicons-info"></span>';
+                    echo '</span>';
+                    echo '</span>';
+                } else {
+                    echo '<span class="pennylane-status not-synced">';
+                    echo '<span class="dashicons dashicons-minus"></span> ';
+                    echo esc_html__('Non synchronisé', 'woo-pennylane');
+                    echo '</span>';
+                }
             }
+            
+            // Bouton de synchronisation
+            if ($excluded !== 'yes') {
+                echo '<div class="pennylane-actions">';
+                echo '<button type="button" class="button button-small pennylane-sync-product" data-product-id="' . esc_attr($post_id) . '">';
+                echo '<span class="dashicons dashicons-update"></span> ';
+                echo esc_html__('Synchroniser', 'woo-pennylane');
+                echo '</button>';
+                echo '<span class="spinner"></span>';
+                echo '</div>';
+            }
+            
+            echo '</div>';
         }
-        
-        echo ' <a href="#" class="pennylane-sync-product" data-product-id="' . esc_attr($post_id) . '">' . esc_html__('Sync', 'woo-pennylane') . '</a>';
-    }
-
     /**
      * Ajoute des actions en masse pour les produits
      */
