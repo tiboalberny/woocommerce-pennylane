@@ -3,7 +3,7 @@
  * Plugin Name: WooCommerce Pennylane Integration
  * Plugin URI: https://lespetitschaudrons.fr
  * Description: Intégration entre WooCommerce et Pennylane pour la synchronisation des factures, clients et produits
- * Version: 1.4.0
+ * Version: 1.5.0
  * Author: Tibo
  * Author URI: https://hostophoto.fr
  * License: GPL v2 or later
@@ -22,7 +22,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Définition des constantes
-define('WOO_PENNYLANE_VERSION', '1.4.0');
+define('WOO_PENNYLANE_VERSION', '1.5.0');
 define('WOO_PENNYLANE_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('WOO_PENNYLANE_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('WOO_PENNYLANE_PLUGIN_BASENAME', plugin_basename(__FILE__));
