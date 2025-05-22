@@ -159,7 +159,7 @@ class WooPennylane_Customer_Sync {
         }
 
         if (!preg_match('/^[A-Z]{2}$/', $data['billing_address']['country_alpha2'])) {
-            throw new Exception(sprintf(__('Format de code pays invalide pour l'adresse de facturation: %s. Doit être 2 lettres majuscules (ex: FR).', 'woo-pennylane'), $data['billing_address']['country_alpha2']));
+            throw new Exception(sprintf(__('Format de code pays invalide pour l\'adresse de facturation: %s. Doit être 2 lettres majuscules (ex: FR).', 'woo-pennylane'), $data['billing_address']['country_alpha2']));
         }
         
         // Validation de l'adresse de livraison si présente
@@ -171,7 +171,7 @@ class WooPennylane_Customer_Sync {
                 throw new Exception(__('Adresse de livraison incomplète', 'woo-pennylane'));
             }
             if (!preg_match('/^[A-Z]{2}$/', $data['delivery_address']['country_alpha2'])) {
-                throw new Exception(sprintf(__('Format de code pays invalide pour l'adresse de livraison: %s. Doit être 2 lettres majuscules (ex: FR).', 'woo-pennylane'), $data['delivery_address']['country_alpha2']));
+                throw new Exception(sprintf(__('Format de code pays invalide pour l\'adresse de livraison: %s. Doit être 2 lettres majuscules (ex: FR).', 'woo-pennylane'), $data['delivery_address']['country_alpha2']));
             }
         }
 

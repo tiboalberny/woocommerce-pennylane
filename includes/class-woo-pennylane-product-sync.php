@@ -3,6 +3,25 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
+// Attempt to load the Logger class early
+$logger_file_path_early_check = WOO_PENNYLANE_PLUGIN_DIR . 'includes/class-woo-pennylane-logger.php';
+if (file_exists($logger_file_path_early_check)) {
+    // Temporarily set max error reporting for this include
+    $old_error_reporting = error_reporting(E_ALL);
+    $old_display_errors = ini_set('display_errors', '1'); // Attempt to force display if possible
+    try {
+        require_once $logger_file_path_early_check;
+    } catch (Throwable $t) {
+        error_log('WOO_PENNYLANE_THROWABLE during logger require: ' . $t->getMessage());
+    }
+    // Restore previous error reporting
+    error_reporting($old_error_reporting);
+    ini_set('display_errors', $old_display_errors);
+} else {
+    // This will be a critical failure, log it if possible, though Logger might not be available
+    error_log('WOO_PENNYLANE_CRITICAL: Logger file does not exist at path (early check): ' . $logger_file_path_early_check);
+}
+
 /**
  * Classe de synchronisation des produits WooCommerce avec Pennylane
  */
@@ -16,6 +35,11 @@ class WooPennylane_Product_Sync {
      * Constructeur
      */
     public function __construct() {
+        // The Logger class should have been loaded by the require_once statement at the top of this file.
+        // We can add a check here for debugging if it's still not found.
+        if (!class_exists('WooPennylane\\Logger')) {
+            error_log('WOO_PENNYLANE_DEBUG: Logger class STILL not found in __construct, despite early require_once.');
+        }
         $this->api_client = new \WooPennylane\Api\Client();
     }
 
@@ -38,7 +62,7 @@ class WooPennylane_Product_Sync {
 
         try {
             // Prépare les données du produit
-            $product_data = $this->prepare_product_data($product);
+            $product_data = self::prepare_product_data($product);
 
             // Vérifie les champs obligatoires
             $this->validate_product_data($product_data);
@@ -138,7 +162,7 @@ class WooPennylane_Product_Sync {
         if (empty($data['vat_rate']) || !preg_match('/^[A-Z]{2}_\d+$/', $data['vat_rate'])) {
             throw new Exception(__('Taux de TVA manquant ou invalide (format attendu: FR_XXX)', 'woo-pennylane'));
         }
-
+        
         if (empty($data['product_type']) || !in_array($data['product_type'], ['GOODS', 'SERVICE'])) {
             throw new Exception(sprintf(__('Type de produit invalide: %s. Doit être GOODS ou SERVICE.', 'woo-pennylane'), $data['product_type']));
         }
@@ -150,7 +174,7 @@ class WooPennylane_Product_Sync {
      * @param WC_Product $product Produit WooCommerce
      * @return array Données formatées pour l'API Pennylane
      */
-    private function prepare_product_data($product) {
+    public static function prepare_product_data($product) {
         // Récupération du prix HT
         $price_before_tax = (float) $product->get_regular_price();
         
@@ -160,8 +184,8 @@ class WooPennylane_Product_Sync {
         }
         
         // Récupération du taux de TVA
-        $vat_rate = $this->get_product_tax_rate($product);
-        $vat_rate_formatted = $this->format_vat_rate($vat_rate); // "FR_200" pour 20%
+        $vat_rate = self::get_product_tax_rate($product);
+        $vat_rate_formatted = self::format_vat_rate($vat_rate); // "FR_200" pour 20%
         
         // Préparation des données selon le format requis
         $product_data = array(
@@ -173,7 +197,7 @@ class WooPennylane_Product_Sync {
             'unit' => 'piece', // Par défaut, à adapter selon vos besoins
             'currency' => get_woocommerce_currency(),
             'reference' => $product->get_sku() ? $product->get_sku() : 'WC-' . $product->get_id(),
-            'product_type' => $this->get_product_type($product) // Ajout du type de produit (GOODS ou SERVICE)
+            'product_type' => self::get_product_type($product) // Ajout du type de produit (GOODS ou SERVICE)
         );
         
         // Ajout du compte comptable si configuré
@@ -191,7 +215,7 @@ class WooPennylane_Product_Sync {
      * @param float $rate Taux de TVA (ex: 20.0)
      * @return string Format Pennylane (ex: "FR_200")
      */
-    private function format_vat_rate($rate) {
+    public static function format_vat_rate($rate) {
         // Par défaut, utiliser la France comme pays de TVA
         $country = 'FR';
         
@@ -207,7 +231,7 @@ class WooPennylane_Product_Sync {
      * @param WC_Product $product Produit WooCommerce
      * @return string Type de produit
      */
-    private function get_product_type($product) {
+    public static function get_product_type($product) {
         if ($product->is_virtual() || $product->is_downloadable()) {
             return 'SERVICE';
         }
@@ -244,7 +268,7 @@ class WooPennylane_Product_Sync {
      * @param WC_Product $product Produit WooCommerce
      * @return float Taux de TVA
      */
-    private function get_product_tax_rate($product) {
+    public static function get_product_tax_rate($product) {
         $tax_class = $product->get_tax_class();
         $tax_rates = WC_Tax::get_rates($tax_class);
         
@@ -254,6 +278,60 @@ class WooPennylane_Product_Sync {
         }
         
         return 0;
+    }
+
+    /**
+     * Compare les données d'un produit WooCommerce préparé avec les données Pennylane.
+     * Utilisé par WooPennylane_Settings pour déterminer si une MàJ est nécessaire.
+     *
+     * @param array $wc_data Données WooCommerce préparées pour Pennylane.
+     * @param array $pennylane_data Données du produit récupérées de Pennylane.
+     * @return bool True si les données sont considérées comme identiques, False sinon.
+     */
+    public static function compare_product_data($wc_data, $pennylane_data) {
+        // Normaliser les prix en float pour la comparaison
+        $wc_price = isset($wc_data['price_before_tax']) ? (float)$wc_data['price_before_tax'] : null;
+        $pl_price = isset($pennylane_data['price_before_tax']) ? (float)$pennylane_data['price_before_tax'] : null;
+
+        // Comparaison du prix
+        if (abs($wc_price - $pl_price) > 0.001) return false; // Tolérance pour les flottants
+        
+        if (isset($wc_data['label']) && $wc_data['label'] !== $pennylane_data['label']) return false;
+        
+        // La référence (SKU) est envoyée dans $wc_data['reference'], Pennylane la stocke dans $pennylane_data['reference'].
+        if (isset($wc_data['reference']) && $wc_data['reference'] !== $pennylane_data['reference']) return false;
+        
+        // Comparer le type de produit
+        if (isset($wc_data['product_type']) && $wc_data['product_type'] !== $pennylane_data['product_type']) return false;
+        
+        // Comparer le taux de TVA formaté
+        if (isset($wc_data['vat_rate']) && $wc_data['vat_rate'] !== $pennylane_data['vat_rate']) return false;
+        
+        // Comparer la devise
+        if (isset($wc_data['currency']) && $wc_data['currency'] !== $pennylane_data['currency']) return false;
+
+        // Comparer le external_reference (WC Product ID)
+        // Pennylane stocke cela dans 'external_reference'
+        if (isset($wc_data['external_reference']) && $wc_data['external_reference'] !== $pennylane_data['external_reference']) {
+            // Exception: si le external_reference de WC est 'WC-ID' et celui de PL est juste 'ID' (ancien format)
+            // on peut considérer ça comme potentiellement ok si les ID matchent.
+            // Mais pour une comparaison stricte, on les garde différents si le format n'est pas identique.
+            // La synchro devrait mettre à jour le format de `external_reference` sur PL si besoin.
+        }
+
+
+        // Optionnel: Comparer la description si c'est un champ important
+        // if (isset($wc_data['description']) && $wc_data['description'] !== $pennylane_data['description']) return false;
+
+        // Optionnel: Comparer l'ID du compte comptable
+        // if (isset($wc_data['ledger_account_id']) && $wc_data['ledger_account_id'] !== $pennylane_data['ledger_account_id']) return false;
+        // Attention: $pennylane_data['ledger_account_id'] peut être null si non défini, $wc_data['ledger_account_id'] peut ne pas exister si non configuré.
+        $wc_ledger_id = isset($wc_data['ledger_account_id']) ? $wc_data['ledger_account_id'] : null;
+        $pl_ledger_id = isset($pennylane_data['ledger_account_id']) ? $pennylane_data['ledger_account_id'] : null;
+        if ($wc_ledger_id !== $pl_ledger_id) return false;
+
+
+        return true;
     }
 
     /**

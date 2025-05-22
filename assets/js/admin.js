@@ -543,12 +543,16 @@ jQuery(document).ready(function($) {
                 if (response.success) {
                     const data = response.data;
                     
-                    $('#products-found').text(data.total);
-                    $('#products-synced').text(data.synced);
-                    $('#products-to-sync').text(data.to_sync);
+                    // Mise à jour des nouveaux champs de statistiques
+                    $('#products-total-wc').text(data.total_wc_products || 0);
+                    $('#products-to-create').text(data.to_create || 0);
+                    $('#products-to-update').text(data.to_update || 0);
+                    $('#products-up-to-date').text(data.up_to_date || 0);
                     
                     $('#products-results').show();
-                    $('#start-product-sync').prop('disabled', data.to_sync === 0);
+                    // Activer le bouton si des produits sont à créer ou à mettre à jour
+                    const needsSync = (data.to_create || 0) > 0 || (data.to_update || 0) > 0;
+                    $('#start-product-sync').prop('disabled', !needsSync);
                 } else {
                     alert(response.data);
                 }
@@ -576,7 +580,10 @@ jQuery(document).ready(function($) {
         $('#product-sync-progress').show();
         
         let processedProducts = 0;
-        const totalProducts = parseInt($('#products-to-sync').text(), 10);
+        // Mettre à jour totalProducts pour la barre de progression
+        const toCreate = parseInt($('#products-to-create').text(), 10) || 0;
+        const toUpdate = parseInt($('#products-to-update').text(), 10) || 0;
+        const totalProducts = toCreate + toUpdate;
 
         function updateProductProgress(current, total) {
             const percentage = Math.round((current / total) * 100);
@@ -822,7 +829,7 @@ jQuery(document).ready(function($) {
     } else {
         console.log("Aucun bouton n'a été trouvé avec la classe .sync-pennylane-customer");
     }
-
+});
     // Analyse des clients invités
 $('#analyze-guest-customers').on('click', function(e) {
     e.preventDefault();
@@ -936,4 +943,5 @@ $('#start-guest-customer-sync').on('click', function(e) {
     // Démarrer la synchronisation
     syncNextBatch();
 });
+
 });

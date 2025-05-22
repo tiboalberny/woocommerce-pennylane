@@ -120,6 +120,18 @@ class Client {
     public function update_product($product_id, $data) {
         return $this->request('PUT', "products/{$product_id}", $data);
     }
+
+    public function get_product($product_id) {
+        return $this->request('GET', "products/{$product_id}");
+    }
+
+    public function find_product_by_reference($reference_value, $reference_type = 'external_reference') {
+        $allowed_reference_types = ['external_reference', 'reference'];
+        if (!in_array($reference_type, $allowed_reference_types)) {
+            throw new \InvalidArgumentException('Invalid reference type for product search.');
+        }
+        return $this->request('GET', 'products?' . $reference_type . '=' . urlencode($reference_value));
+    }
     // --- End Product Methods ---
 
     public function get_debug_info() {

@@ -32,18 +32,23 @@ if (!defined('ABSPATH')) {
         
         <div class="products-stats">
             <div class="stat-item">
-                <span class="label"><?php _e('Produits trouvés :', 'woo-pennylane'); ?></span>
-                <span class="value" id="products-found">0</span>
+                <span class="label"><?php _e('Produits WooCommerce trouvés :', 'woo-pennylane'); ?></span>
+                <span class="value" id="products-total-wc">0</span>
             </div>
             
             <div class="stat-item">
-                <span class="label"><?php _e('Déjà synchronisés :', 'woo-pennylane'); ?></span>
-                <span class="value" id="products-synced">0</span>
+                <span class="label"><?php _e('Produits à créer sur Pennylane :', 'woo-pennylane'); ?></span>
+                <span class="value" id="products-to-create">0</span>
             </div>
-            
+
             <div class="stat-item">
-                <span class="label"><?php _e('À synchroniser :', 'woo-pennylane'); ?></span>
-                <span class="value" id="products-to-sync">0</span>
+                <span class="label"><?php _e('Produits à mettre à jour sur Pennylane :', 'woo-pennylane'); ?></span>
+                <span class="value" id="products-to-update">0</span>
+            </div>
+
+            <div class="stat-item">
+                <span class="label"><?php _e('Produits déjà à jour sur Pennylane :', 'woo-pennylane'); ?></span>
+                <span class="value" id="products-up-to-date">0</span>
             </div>
         </div>
 

@@ -838,34 +838,161 @@ public function sync_single_customer() {
         }
 
         try {
-            // Requête pour compter les produits
-            $args = array(
+            // Initialisation du client API et du synchroniseur de produits
+            if (!class_exists('WooPennylane\\Api\\Client')) {
+                require_once WOO_PENNYLANE_PLUGIN_DIR . 'includes/class-woo-pennylane-api-client.php';
+            }
+            $api_client = new \WooPennylane\Api\Client();
+
+            if (!class_exists('WooPennylane_Product_Sync')) {
+                require_once WOO_PENNYLANE_PLUGIN_DIR . 'includes/class-woo-pennylane-product-sync.php';
+            }
+            // Nous avons besoin d'une instance pour accéder à prepare_product_data et get_product_tax_rate, format_vat_rate, get_product_type
+            // temporairement, car ces méthodes devraient idéalement être statiques ou dans un helper si utilisées hors synchro.
+            // $product_sync_helper = new WooPennylane_Product_Sync(); // REMOVED
+
+            $args = [
                 'status' => 'publish',
-                'limit' => -1,
+                'limit' => -1, // Tous les produits
                 'return' => 'ids',
-            );
+            ];
+            $wc_product_ids = wc_get_products($args);
 
-            $products = wc_get_products($args);
-            $total = count($products);
+            $total_wc_products = count($wc_product_ids);
+            $stats = [
+                'total_wc_products' => $total_wc_products,
+                'to_create' => 0,
+                'to_update' => 0,
+                'up_to_date' => 0,
+                'pennylane_ids_found' => [], // Pour stocker les ID Pennylane trouvés pour màj des metas
+                'error_details' => [] // Pour logger les erreurs spécifiques lors de l'analyse
+            ];
 
-            // Compte des produits déjà synchronisés
-            $synced = 0;
-            foreach ($products as $product_id) {
-                if (get_post_meta($product_id, '_pennylane_product_synced', true) === 'yes') {
-                    $synced++;
+            foreach ($wc_product_ids as $wc_product_id) {
+                $product = wc_get_product($wc_product_id);
+                if (!$product) continue;
+
+                $pennylane_id = get_post_meta($wc_product_id, '_pennylane_product_id', true);
+                $pennylane_product_data = null;
+                $found_by_reference = false;
+
+                try {
+                    if ($pennylane_id) {
+                        $pennylane_product_data = $api_client->get_product($pennylane_id);
+                    } else {
+                        // Essayer par SKU (reference)
+                        $sku = $product->get_sku();
+                        if (!empty($sku)) {
+                            $response = $api_client->find_product_by_reference($sku, 'reference');
+                            if (!empty($response[0])) {
+                                $pennylane_product_data = $response[0];
+                                $pennylane_id = $pennylane_product_data['id'];
+                                $stats['pennylane_ids_found'][$wc_product_id] = $pennylane_id; // Marquer pour màj meta
+                                $found_by_reference = true;
+                            }
+                        }
+                        // Si non trouvé par SKU, essayer par external_reference (WC-ID)
+                        if (!$pennylane_product_data) {
+                            $external_ref = 'WC-' . $wc_product_id;
+                            $response = $api_client->find_product_by_reference($external_ref, 'external_reference');
+                            if (!empty($response[0])) {
+                                $pennylane_product_data = $response[0];
+                                $pennylane_id = $pennylane_product_data['id'];
+                                $stats['pennylane_ids_found'][$wc_product_id] = $pennylane_id;
+                                $found_by_reference = true;
+                            }
+                        }
+                    }
+
+                    if ($pennylane_product_data) {
+                        // Le produit existe sur Pennylane, comparons-le
+                        // Pour utiliser prepare_product_data, nous avons besoin de l'instance de WooPennylane_Product_Sync
+                        // $wc_prepared_data = $this->product_sync_instance->prepare_product_data($product); // Ne fonctionne pas ici
+                        // Appel direct à la méthode prepare_product_data de l'instance créée
+                        // $product_sync_reflection = new \ReflectionClass('WooPennylane_Product_Sync'); // REMOVED
+                        // $prepare_method = $product_sync_reflection->getMethod('prepare_product_data'); // REMOVED
+                        // $prepare_method->setAccessible(true); // Rendre la méthode accessible // REMOVED
+                        // $wc_prepared_data = $prepare_method->invoke($product_sync_helper, $product); // REMOVED
+                        $wc_prepared_data = \WooPennylane_Product_Sync::prepare_product_data($product);
+                        
+                        if (\WooPennylane_Product_Sync::compare_product_data($wc_prepared_data, $pennylane_product_data)) {
+                            $stats['up_to_date']++;
+                        } else {
+                            $stats['to_update']++;
+                        }
+                        if ($found_by_reference && $pennylane_id) {
+                             // Mettre à jour le meta localement si trouvé par référence
+                             update_post_meta($wc_product_id, '_pennylane_product_id', $pennylane_id);
+                             update_post_meta($wc_product_id, '_pennylane_product_synced', 'yes'); // Marquer comme synchronisé car on l'a trouvé
+                        }
+                    } else {
+                        $stats['to_create']++;
+                    }
+                } catch (\Exception $e) {
+                    // Si get_product échoue (ex: 404), cela signifie que l'ID Pennylane stocké n'est plus valide.
+                    if ($pennylane_id && !$found_by_reference) { // Seulement si on cherchait par ID et pas par référence
+                        $stats['error_details'][] = sprintf("Produit WC #%d: ID Pennylane %s trouvé localement mais invalide sur Pennylane (%s). Sera recréé.", $wc_product_id, $pennylane_id, $e->getMessage());
+                        $stats['to_create']++;
+                        delete_post_meta($wc_product_id, '_pennylane_product_id'); // Supprimer l'ID invalide
+                        delete_post_meta($wc_product_id, '_pennylane_product_synced');
+                    } else {
+                        $stats['error_details'][] = sprintf("Produit WC #%d: Erreur lors de la récupération/recherche sur Pennylane: %s", $wc_product_id, $e->getMessage());
+                        // On pourrait le classer en 'to_create' par sécurité, ou ajouter une catégorie 'erreur_analyse'
+                        $stats['to_create']++; // Par défaut, on essaiera de le créer s'il y a une erreur d'analyse
+                    }
                 }
             }
+            
+            // N'envoyer que les stats agrégées, pas tous les IDs ou erreurs détaillées pour l'instant
+            // Sauf si le mode debug est activé.
+            $response_data = [
+                'total_wc_products' => $stats['total_wc_products'],
+                'to_create' => $stats['to_create'],
+                'to_update' => $stats['to_update'],
+                'up_to_date' => $stats['up_to_date'],
+            ];
+            if (get_option('woo_pennylane_debug_mode', 'no') === 'yes') {
+                $response_data['analysis_details'] = $stats; // Envoyer tous les détails en mode debug
+            }
 
-            wp_send_json_success(array(
-                'total' => $total,
-                'synced' => $synced,
-                'to_sync' => $total - $synced
-            ));
+            wp_send_json_success($response_data);
 
-        } catch (Exception $e) {
+        } catch (\Exception $e) {
             wp_send_json_error($e->getMessage());
         }
     }
+
+    /**
+     * Compare les données d'un produit WooCommerce préparé avec les données Pennylane.
+     *
+     * @param array $wc_data Données WooCommerce préparées pour Pennylane.
+     * @param array $pennylane_data Données du produit récupérées de Pennylane.
+     * @return bool True si les données sont considérées comme identiques, False sinon.
+     */
+    // private function compare_product_data($wc_data, $pennylane_data) { // ENTIRE METHOD REMOVED
+        // Comparaison simple pour l'exemple. À affiner selon les champs importants.
+        // Normaliser les prix en float pour la comparaison
+        // $wc_price = isset($wc_data['price_before_tax']) ? (float)$wc_data['price_before_tax'] : null;
+        // $pl_price = isset($pennylane_data['price_before_tax']) ? (float)$pennylane_data['price_before_tax'] : null;
+
+        // Comparaison du prix avec une tolérance pour les erreurs de flottants si nécessaire
+        // Exemple simple : if (abs($wc_price - $pl_price) > 0.001) return false;
+        // if ($wc_price !== $pl_price) return false;
+        
+        // if (isset($wc_data['label']) && $wc_data['label'] !== $pennylane_data['label']) return false;
+        // La référence (SKU) est envoyée, mais Pennylane la stocke dans `reference`.
+        // if (isset($wc_data['reference']) && $wc_data['reference'] !== $pennylane_data['reference']) return false;
+        // Comparer le type de produit
+        // if (isset($wc_data['product_type']) && $wc_data['product_type'] !== $pennylane_data['product_type']) return false;
+        // Comparer le taux de TVA formaté
+        // if (isset($wc_data['vat_rate']) && $wc_data['vat_rate'] !== $pennylane_data['vat_rate']) return false;
+        // Comparer la devise
+        // if (isset($wc_data['currency']) && $wc_data['currency'] !== $pennylane_data['currency']) return false;
+
+        // Ajouter d'autres comparaisons si nécessaire (description, unit, ledger_account_id etc.)
+
+    //    return true;
+    // }
 
     /**
      * Synchronise les produits vers Pennylane
@@ -878,60 +1005,156 @@ public function sync_single_customer() {
         }
 
         $offset = isset($_POST['offset']) ? intval($_POST['offset']) : 0;
-        $batch_size = 10; // Nombre de produits à traiter par lot
+        $limit = isset($_POST['limit']) ? intval($_POST['limit']) : 10; // Utiliser une limite passée ou défaut 10
+        $batch_size = $limit; // Pour la compatibilité avec le JS existant qui compte sur processed
 
         try {
-            // Initialise le synchroniseur
-            require_once WOO_PENNYLANE_PLUGIN_DIR . 'includes/class-woo-pennylane-product-sync.php';
-            $synchronizer = new WooPennylane_Product_Sync();
-
-            // Récupération des produits pour ce lot
-            $args = array(
-                'status' => 'publish',
-                'limit' => $batch_size,
-                'offset' => $offset,
-                'return' => 'ids',
-            );
-
-            $products = wc_get_products($args);
-            $results = array();
-            $processed = 0;
-
-            foreach ($products as $product_id) {
-                // Vérifie si le produit n'est pas déjà synchronisé ou exclu
-                if (get_post_meta($product_id, '_pennylane_product_synced', true) !== 'yes' && 
-                    get_post_meta($product_id, '_pennylane_product_exclude', true) !== 'yes') {
-                    try {
-                        $product = wc_get_product($product_id);
-                        $synchronizer->sync_product($product_id);
-                        $results[] = array(
-                            'status' => 'success',
-                            'message' => sprintf(
-                                __('Produit "%s" synchronisé avec succès', 'woo-pennylane'), 
-                                $product->get_name()
-                            )
-                        );
-                    } catch (Exception $e) {
-                        $results[] = array(
-                            'status' => 'error',
-                            'message' => sprintf(__('Erreur pour le produit #%d : %s', 'woo-pennylane'), $product_id, $e->getMessage())
-                        );
-                    }
-                } else {
-                    $results[] = array(
-                        'status' => 'skipped',
-                        'message' => sprintf(__('Produit #%d ignoré - déjà synchronisé ou exclu', 'woo-pennylane'), $product_id)
-                    );
-                }
-                $processed++;
+            // Assurer que la classe pour l'historique de synchronisation est chargée
+            if (!class_exists('WooPennylane_Sync_History')) {
+                require_once WOO_PENNYLANE_PLUGIN_DIR . 'includes/class-woo-pennylane-sync-history.php';
+            }
+            // Assurer que la classe Logger est chargée
+            if (!class_exists('WooPennylane\\Logger')) {
+                require_once WOO_PENNYLANE_PLUGIN_DIR . 'includes/class-woo-pennylane-logger.php';
             }
 
-            wp_send_json_success(array(
-                'processed' => $processed,
-                'results' => $results
-            ));
+            if (!class_exists('WooPennylane\\Api\\Client')) {
+                require_once WOO_PENNYLANE_PLUGIN_DIR . 'includes/class-woo-pennylane-api-client.php';
+            }
+            $api_client = new \WooPennylane\Api\Client();
 
-        } catch (Exception $e) {
+            if (!class_exists('WooPennylane_Product_Sync')) {
+            require_once WOO_PENNYLANE_PLUGIN_DIR . 'includes/class-woo-pennylane-product-sync.php';
+            }
+            $synchronizer = new WooPennylane_Product_Sync();
+            // $product_sync_helper est nécessaire pour prepare_product_data et compare_product_data
+            // qui sont (pour l'instant) des méthodes d'instance ou privées
+            // $product_sync_helper = $synchronizer; // REMOVED
+
+            // Récupérer TOUS les IDs de produits WC pour déterminer ceux à traiter dans ce lot
+            $all_wc_product_ids_args = [
+                'status' => 'publish',
+                'limit' => -1,
+                'return' => 'ids',
+            ];
+            $all_wc_product_ids = wc_get_products($all_wc_product_ids_args);
+
+            $product_ids_to_process_in_this_batch = [];
+            $products_actually_synced_this_run = 0;
+            $skipped_up_to_date_in_potential_batch = 0;
+            $results = [];
+
+            // Parcourir tous les produits pour identifier le lot actuel à synchroniser
+            // en sautant ceux déjà traités (offset) et ceux qui sont à jour.
+            $current_offset_count = 0;
+
+            foreach ($all_wc_product_ids as $wc_product_id) {
+                if (get_post_meta($wc_product_id, '_pennylane_product_exclude', true) === 'yes') {
+                    // $results[] = ['status' => 'skipped', 'message' => sprintf(__('Produit #%d ignoré (exclu).', 'woo-pennylane'), $wc_product_id)];
+                    continue; // Ignorer les produits exclus
+                }
+
+                $product = wc_get_product($wc_product_id);
+                if (!$product) continue;
+
+                $pennylane_id = get_post_meta($wc_product_id, '_pennylane_product_id', true);
+                $pennylane_product_data = null;
+                $needs_sync = false;
+                $status_message_prefix = sprintf(__('Produit "%s" (#%d)', 'woo-pennylane'), $product->get_name(), $wc_product_id);
+
+                try {
+                    if ($pennylane_id) {
+                        $pennylane_product_data = $api_client->get_product($pennylane_id);
+                    } else {
+                        $sku = $product->get_sku();
+                        if (!empty($sku)) {
+                            $response = $api_client->find_product_by_reference($sku, 'reference');
+                            if (!empty($response[0])) $pennylane_product_data = $response[0];
+                        }
+                        if (!$pennylane_product_data) {
+                            $external_ref = 'WC-' . $wc_product_id;
+                            $response = $api_client->find_product_by_reference($external_ref, 'external_reference');
+                            if (!empty($response[0])) $pennylane_product_data = $response[0];
+                        }
+                        if ($pennylane_product_data && isset($pennylane_product_data['id'])) {
+                            update_post_meta($wc_product_id, '_pennylane_product_id', $pennylane_product_data['id']);
+                            // On ne marque pas _pennylane_product_synced ici, car on va le comparer.
+                        }
+                    }
+
+                    if ($pennylane_product_data) {
+                        // $product_sync_reflection = new \ReflectionClass('WooPennylane_Product_Sync'); // REMOVED
+                        // $prepare_method = $product_sync_reflection->getMethod('prepare_product_data'); // REMOVED
+                        // $prepare_method->setAccessible(true); // REMOVED
+                        // $wc_prepared_data = $prepare_method->invoke($product_sync_helper, $product); // REMOVED
+                        $wc_prepared_data = \WooPennylane_Product_Sync::prepare_product_data($product);
+                        
+                        if (!\WooPennylane_Product_Sync::compare_product_data($wc_prepared_data, $pennylane_product_data)) {
+                            $needs_sync = true; // Nécessite une mise à jour
+                    }
+                } else {
+                        $needs_sync = true; // Nécessite une création
+                    }
+
+                } catch (\Exception $e) {
+                    // Si erreur lors de la vérification (ex: ID Pennylane invalide), on le marque pour synchro (création)
+                    $results[] = ['status' => 'error', 'message' => $status_message_prefix . ': ' . sprintf(__('Erreur d\'analyse avant synchro: %s. Tentative de synchronisation.', 'woo-pennylane'), $e->getMessage())];
+                    $needs_sync = true;
+                    delete_post_meta($wc_product_id, '_pennylane_product_id'); // S'assurer que l'ID invalide est supprimé
+                    delete_post_meta($wc_product_id, '_pennylane_product_synced');
+                }
+
+                if ($needs_sync) {
+                    if ($current_offset_count < $offset) {
+                        $current_offset_count++;
+                        continue; // Ce produit est dans un lot précédent
+                    }
+                    // Ajouter au lot actuel si la taille du lot n'est pas atteinte
+                    if (count($product_ids_to_process_in_this_batch) < $batch_size) {
+                        $product_ids_to_process_in_this_batch[] = $wc_product_id;
+                    }
+                } else {
+                    // Si le produit est à jour, mais qu'il aurait pu faire partie de ce lot (selon l'offset)
+                    // on compte cela pour que le front-end comprenne que le "processed" inclut des vérifications.
+                    if ($current_offset_count >= $offset && count($product_ids_to_process_in_this_batch) + $skipped_up_to_date_in_potential_batch < $batch_size) {
+                         $skipped_up_to_date_in_potential_batch++;
+                         $results[] = ['status' => 'skipped', 'message' => $status_message_prefix . ': ' . __('Déjà à jour.', 'woo-pennylane')];
+                    }
+                }
+                // Si le lot est plein, sortir de la boucle principale
+                if (count($product_ids_to_process_in_this_batch) >= $batch_size) {
+                    break;
+                }
+            }
+
+            // Synchroniser les produits identifiés pour ce lot
+            foreach ($product_ids_to_process_in_this_batch as $product_id_to_sync) {
+                try {
+                    $product_obj = wc_get_product($product_id_to_sync);
+                    $sync_mode_for_log = 'batch_sync'; // Ou un autre identifiant pour le mode
+                    $synchronizer->sync_product($product_id_to_sync, $sync_mode_for_log);
+                    $results[] = [
+                        'status' => 'success',
+                        'message' => sprintf(__('Produit "%s" (#%d) synchronisé.', 'woo-pennylane'), $product_obj->get_name(), $product_id_to_sync)
+                    ];
+                    $products_actually_synced_this_run++;
+                } catch (\Exception $e) {
+                    $product_obj_for_error = wc_get_product($product_id_to_sync); // Pour avoir le nom même en cas d'erreur
+                    $name_for_error = $product_obj_for_error ? $product_obj_for_error->get_name() : 'N/A';
+                    $results[] = [
+                        'status' => 'error',
+                        'message' => sprintf(__('Erreur Produit "%s" (#%d): %s', 'woo-pennylane'), $name_for_error, $product_id_to_sync, $e->getMessage())
+                    ];
+                }
+            }
+
+            wp_send_json_success([
+                'processed' => count($product_ids_to_process_in_this_batch) + $skipped_up_to_date_in_potential_batch, // Total traités ou vérifiés comme à jour dans ce batch
+                'results' => $results,
+                'actually_synced' => $products_actually_synced_this_run // Pour info
+            ]);
+
+        } catch (\Exception $e) {
             wp_send_json_error($e->getMessage());
         }
     }
