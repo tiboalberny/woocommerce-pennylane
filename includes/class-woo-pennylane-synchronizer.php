@@ -8,11 +8,11 @@ if (!defined('ABSPATH')) {
  */
 class WooPennylane_Synchronizer {
     /**
-     * Clé API Pennylane
+     * Instance du client API Pennylane
      *
-     * @var string
+     * @var \WooPennylane\Api\Client
      */
-    private $api_key;
+    private $api_client;
     
     /**
      * URL de base de l'API Pennylane
@@ -20,25 +20,12 @@ class WooPennylane_Synchronizer {
      * @var string
      */
     private $api_url = 'https://app.pennylane.com/api/external/v2';
-    
-    /**
-     * Logger
-     *
-     * @var WooPennylane_Logger
-     */
-    private $logger;
 
     /**
      * Constructeur
      */
     public function __construct() {
-        $this->api_key = get_option('woo_pennylane_api_key');
-        
-        // Initialisation du logger si disponible
-        global $woo_pennylane_logger;
-        if ($woo_pennylane_logger) {
-            $this->logger = $woo_pennylane_logger;
-        }
+        $this->api_client = new \WooPennylane\Api\Client();
     }
 
     /**
@@ -64,16 +51,21 @@ class WooPennylane_Synchronizer {
             // Prépare les données de la facture
             $invoice_data = $this->prepare_invoice_data($order);
 
+            // Valider les données de la facture avant de continuer
+            $this->validate_invoice_data($invoice_data);
+
             // Vérifie si la commande a déjà été synchronisée
             $pennylane_id = get_post_meta($order_id, '_pennylane_invoice_id', true);
             
             if ($pennylane_id) {
                 // Mise à jour de la facture existante
-                $response = $this->send_to_api("invoices/{$pennylane_id}", $invoice_data, 'PUT');
+                // $response = $this->send_to_api("customer_invoices/{$pennylane_id}", $invoice_data, 'PUT');
+                $response = $this->api_client->update_invoice($pennylane_id, $invoice_data);
                 $action_message = __('Facture mise à jour', 'woo-pennylane');
             } else {
                 // Création d'une nouvelle facture
-                $response = $this->send_to_api('invoices', $invoice_data);
+                // $response = $this->send_to_api('customer_invoices', $invoice_data);
+                $response = $this->api_client->send_invoice($invoice_data);
                 $action_message = __('Facture créée', 'woo-pennylane');
                 
                 // Sauvegarde l'ID Pennylane
@@ -110,27 +102,36 @@ class WooPennylane_Synchronizer {
             }
             
             // Log de succès
-            if ($this->logger) {
-                $this->logger->info(sprintf(
-                    'Commande #%d synchronisée avec succès vers Pennylane',
-                    $order_id
-                ));
-            }
+            \WooPennylane\Logger::info(
+                sprintf('Commande #%d synchronisée avec succès vers Pennylane. ID Pennylane: %s', $order_id, isset($response['id']) ? $response['id'] : $pennylane_id),
+                $order_id,
+                'order'
+            );
 
             return true;
 
         } catch (Exception $e) {
-            // Log l'erreur
-            if ($this->logger) {
-                $this->logger->error(sprintf(
-                    'Erreur lors de la synchronisation de la commande #%d: %s',
-                    $order_id,
-                    $e->getMessage()
-                ));
+            $error_message_for_meta = $e->getMessage(); // Message pour le post_meta
+            $log_message_error = sprintf(
+                'Erreur API Pennylane lors de la synchronisation de la commande #%d (Mode: %s): %s',
+                $order_id,
+                $sync_mode,
+                $e->getMessage()
+            );
+            
+            \WooPennylane\Logger::error($log_message_error, $order_id, 'order');
+
+            if (isset($invoice_data)) {
+                $invoice_data_log = $invoice_data;
+                if (isset($invoice_data_log['invoice_lines_attributes']) && count($invoice_data_log['invoice_lines_attributes']) > 5) {
+                    $invoice_data_log['invoice_lines_attributes'] = array_slice($invoice_data_log['invoice_lines_attributes'], 0, 5);
+                    $invoice_data_log['invoice_lines_attributes_omitted'] = true;
+                }
+                \WooPennylane\Logger::debug("Données préparées pour la commande #{$order_id} (potentiellement tronquées): " . wp_json_encode($invoice_data_log), $order_id, 'order');
             }
             
             // Enregistre l'erreur dans les métadonnées de la commande
-            update_post_meta($order_id, '_pennylane_sync_error', $e->getMessage());
+            update_post_meta($order_id, '_pennylane_sync_error', $error_message_for_meta);
             update_post_meta($order_id, '_pennylane_last_sync', current_time('mysql'));
             
             // Enregistrer l'événement dans l'historique
@@ -154,6 +155,61 @@ class WooPennylane_Synchronizer {
     }
 
     /**
+     * Valide les données de la facture avant l'envoi à Pennylane
+     *
+     * @param array $invoice_data Données de la facture
+     * @throws Exception Si des données obligatoires sont manquantes ou incorrectes
+     */
+    private function validate_invoice_data($invoice_data) {
+        $required_fields = [
+            'customer_id' => __('ID Client Pennylane manquant.', 'woo-pennylane'),
+            'currency' => __('Devise manquante.', 'woo-pennylane'),
+            'issued_on' => __('Date d\'émission manquante.', 'woo-pennylane'),
+            'label' => __('Libellé de la facture manquant.', 'woo-pennylane'),
+            'status' => __('Statut de la facture manquant.', 'woo-pennylane'),
+            'invoice_lines_attributes' => __('Lignes de facture manquantes.', 'woo-pennylane'),
+        ];
+
+        foreach ($required_fields as $field => $error_message) {
+            if (empty($invoice_data[$field])) {
+                throw new Exception($error_message);
+            }
+        }
+
+        if (!in_array($invoice_data['status'], ['draft', 'finalized'])) {
+            throw new Exception(sprintf(__('Statut de facture invalide: %s. Doit être "draft" ou "finalized".', 'woo-pennylane'), $invoice_data['status']));
+        }
+
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $invoice_data['issued_on'])) {
+            throw new Exception(sprintf(__('Format de date d\'émission invalide: %s. Doit être AAAA-MM-JJ.', 'woo-pennylane'), $invoice_data['issued_on']));
+        }
+
+        if (!is_array($invoice_data['invoice_lines_attributes']) || count($invoice_data['invoice_lines_attributes']) === 0) {
+            throw new Exception(__('Les lignes de facture doivent être un tableau non vide.', 'woo-pennylane'));
+        }
+
+        foreach ($invoice_data['invoice_lines_attributes'] as $index => $line) {
+            $line_number = $index + 1;
+            if (empty($line['label'])) {
+                throw new Exception(sprintf(__('Libellé manquant pour la ligne de facture #%d.', 'woo-pennylane'), $line_number));
+            }
+            if (!isset($line['quantity']) || !is_numeric($line['quantity'])) { // quantity can be 1 for discounts with negative price.
+                throw new Exception(sprintf(__('Quantité manquante ou invalide pour la ligne de facture #%d.', 'woo-pennylane'), $line_number));
+            }
+             // For discounts, quantity is 1 and price_before_tax is negative. For regular items, quantity > 0.
+            if ($line['price_before_tax'] >= 0 && $line['quantity'] <= 0 && $line['label'] !== __('Remise', 'woo-pennylane')) {
+                 throw new Exception(sprintf(__('La quantité pour la ligne #%d doit être supérieure à 0.', 'woo-pennylane'), $line_number));
+            }
+            if (!isset($line['price_before_tax']) || !is_numeric($line['price_before_tax'])) {
+                throw new Exception(sprintf(__('Prix HT manquant ou invalide pour la ligne de facture #%d.', 'woo-pennylane'), $line_number));
+            }
+            if (empty($line['vat_rate']) || !preg_match('/^[A-Z]{2}_\d+$/', $line['vat_rate'])) {
+                throw new Exception(sprintf(__('Taux de TVA manquant ou invalide pour la ligne de facture #%d (format attendu: FR_XXX).', 'woo-pennylane'), $line_number));
+            }
+        }
+    }
+
+    /**
      * Prépare les données de la facture au format Pennylane V2
      *
      * @param WC_Order $order Commande WooCommerce
@@ -163,8 +219,11 @@ class WooPennylane_Synchronizer {
     private function prepare_invoice_data($order) {
         $order_id = $order->get_id();
 
-        // --- AJOUT : Lire le statut de création souhaité ---
+        // --- Lire le statut de création souhaité depuis les options ---
         $invoice_status_pref = get_option('woo_pennylane_invoice_creation_status', 'draft'); // Lire l'option, défaut 'draft'
+        if ($invoice_status_pref === 'final') {
+            $invoice_status_pref = 'finalized'; // Adapter pour l'API V2
+        }
 
         // --- 1. Gestion du Client ---
         $pennylane_customer_id = null;
@@ -333,14 +392,11 @@ class WooPennylane_Synchronizer {
             'label'                 => sprintf(__('Commande WooCommerce #%s', 'woo-pennylane'), $order->get_order_number()), // Libellé interne (OBLIGATOIRE)
             'external_reference'    => (string)$order_id, // Référence externe (ID commande WC) (Recommandé)
             'invoice_lines_attributes' => $invoice_lines, // Lignes de la facture (OBLIGATOIRE, au moins une ligne)
-
-            // --- AJOUT du statut basé sur le réglage ---
-            // VÉRIFIER LE NOM EXACT DU CHAMP ('status', 'state', 'is_draft' ?) ET LES VALEURS ('draft', 'final', true/false) DANS LA DOC API V2
-            'status'                => $invoice_status_pref, // 'draft' ou 'final' lu depuis les options
+            'status'                => $invoice_status_pref, // 'draft' ou 'finalized' basé sur l'option
 
             // --- Champs Optionnels (à vérifier si utiles/corrects) ---
              'notes'                 => $order->get_customer_note(), // Notes client
-             'payment_method'        => $order->get_payment_method_title(), // Méthode de paiement
+            // 'payment_method'        => $order->get_payment_method_title(), // Méthode de paiement - A vérifier pour V2, pourrait nécessiter payment_details_attributes ou payment_method_id
              'metadata'              => [ // Métadonnées personnalisées
                  'woocommerce_order_id' => $order_id,
                  'woocommerce_order_number' => $order->get_order_number(),
@@ -400,92 +456,6 @@ class WooPennylane_Synchronizer {
         $shipping_total = $order->get_shipping_total();
 
         return $shipping_total > 0 ? round(($shipping_tax / $shipping_total) * 100, 2) : 0;
-    }
-
-    /**
-     * Envoie une requête à l'API Pennylane
-     *
-     * @param string $endpoint Point de terminaison
-     * @param array $data Données à envoyer
-     * @param string $method Méthode HTTP (POST par défaut)
-     * @return array Réponse de l'API
-     * @throws Exception En cas d'erreur
-     */
-    private function send_to_api($endpoint, $data = null, $method = 'POST') {
-        if (empty($this->api_key)) {
-            throw new Exception(__('Clé API non configurée', 'woo-pennylane'));
-        }
-
-        $url = $this->api_url . '/' . trim($endpoint, '/');
-        
-        $headers = array(
-            'accept: application/json',
-            'authorization: Bearer ' . $this->api_key,
-            'content-type: application/json'
-        );
-
-        $curl = curl_init();
-
-        $curl_options = array(
-            CURLOPT_URL => $url,
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_ENCODING => '',
-            CURLOPT_MAXREDIRS => 10,
-            CURLOPT_TIMEOUT => 30,
-            CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-            CURLOPT_HTTPHEADER => $headers
-        );
-
-        if ($data !== null) {
-            $curl_options[CURLOPT_CUSTOMREQUEST] = $method;
-            $curl_options[CURLOPT_POSTFIELDS] = json_encode($data);
-        } else {
-            $curl_options[CURLOPT_CUSTOMREQUEST] = $method;
-        }
-
-        curl_setopt_array($curl, $curl_options);
-
-        $response = curl_exec($curl);
-        $err = curl_error($curl);
-        $http_code = curl_getinfo($curl, CURLINFO_HTTP_CODE);
-
-        curl_close($curl);
-
-        // Log en mode debug
-        if (get_option('woo_pennylane_debug_mode') === 'yes') {
-            error_log('Pennylane API Request: ' . $url);
-            error_log('Pennylane API Request Method: ' . $method);
-            error_log('Pennylane API Request Data: ' . json_encode($data));
-            error_log('Pennylane API Response Code: ' . $http_code);
-            error_log('Pennylane API Response: ' . $response);
-            if ($err) {
-                error_log('Pennylane API Error: ' . $err);
-            }
-        }
-
-        if ($err) {
-            throw new Exception('Erreur cURL: ' . $err);
-        }
-
-        $response_data = json_decode($response, true);
-
-        if ($http_code >= 400) {
-            $error_message = 'Erreur API (HTTP ' . $http_code . ')';
-            
-            if (isset($response_data['message'])) {
-                $error_message .= ': ' . $response_data['message'];
-            } elseif (isset($response_data['error'])) {
-                $error_message .= ': ' . $response_data['error'];
-            } elseif (isset($response_data['detail'])) {
-                $error_message .= ': ' . $response_data['detail'];
-            } else {
-                $error_message .= ': ' . $response;
-            }
-            
-            throw new Exception($error_message);
-        }
-
-        return $response_data;
     }
 
     /**
@@ -676,21 +646,17 @@ class WooPennylane_Synchronizer {
             try {
                 $this->sync_order($order_id, 'automatic');
                 
-                if ($this->logger) {
-                    $this->logger->info(sprintf(
-                        'Commande #%d synchronisée automatiquement suite au changement de statut vers %s',
-                        $order_id,
-                        $new_status
-                    ));
-                }
+                \WooPennylane\Logger::info(
+                    sprintf('Commande #%d synchronisée automatiquement suite au changement de statut vers %s', $order_id, $new_status),
+                    $order_id,
+                    'order'
+                );
             } catch (Exception $e) {
-                if ($this->logger) {
-                    $this->logger->error(sprintf(
-                        'Erreur lors de la synchronisation automatique de la commande #%d: %s',
-                        $order_id,
-                        $e->getMessage()
-                    ));
-                }
+                \WooPennylane\Logger::error(
+                    sprintf('Erreur lors de la synchronisation automatique de la commande #%d: %s', $order_id, $e->getMessage()),
+                    $order_id,
+                    'order'
+                );
             }
         }
     }

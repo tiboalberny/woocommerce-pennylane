@@ -8,20 +8,15 @@ if (!defined('ABSPATH')) {
  */
 class WooPennylane_Product_Sync {
     /**
-     * Clé API Pennylane
+     * @var \WooPennylane\Api\Client
      */
-    private $api_key;
-
-    /**
-     * URL de base de l'API Pennylane
-     */
-    private $api_url = 'https://app.pennylane.com/api/external/v2';
+    private $api_client;
 
     /**
      * Constructeur
      */
     public function __construct() {
-        $this->api_key = get_option('woo_pennylane_api_key');
+        $this->api_client = new \WooPennylane\Api\Client();
     }
 
     /**
@@ -53,10 +48,10 @@ class WooPennylane_Product_Sync {
             
             if ($pennylane_id) {
                 // Mise à jour du produit existant
-                $response = $this->send_to_api('/products/' . $pennylane_id, $product_data, 'PUT');
+                $response = $this->api_client->update_product($pennylane_id, $product_data);
             } else {
                 // Création d'un nouveau produit
-                $response = $this->send_to_api('/products', $product_data);
+                $response = $this->api_client->create_product($product_data);
                 
                 // Sauvegarde l'ID Pennylane
                 if (isset($response['id'])) {
@@ -82,16 +77,31 @@ class WooPennylane_Product_Sync {
             );
         }
 
+            \WooPennylane\Logger::info(
+                sprintf('Produit ID #%d synchronisé avec succès. ID Pennylane: %s', $product_id, isset($response['id']) ? $response['id'] : $pennylane_id),
+                $product_id,
+                'product'
+            );
+
             return true;
 
         } catch (Exception $e) {
-            // Log l'erreur
-            if (get_option('woo_pennylane_debug_mode') === 'yes') {
-                error_log('Pennylane Product Sync Error (ID #' . $product_id . '): ' . $e->getMessage());
+            $error_message_for_meta = $e->getMessage();
+            $log_message_error = sprintf(
+                'Erreur API Pennylane lors de la synchronisation du produit ID #%d (Mode: %s): %s',
+                $product_id,
+                $sync_mode,
+                $e->getMessage()
+            );
+            
+            \WooPennylane\Logger::error($log_message_error, $product_id, 'product');
+
+            if (isset($product_data)) {
+                 \WooPennylane\Logger::debug("Données préparées pour le produit #{$product_id}: " . wp_json_encode($product_data), $product_id, 'product');
             }
             
             // Enregistre l'erreur dans les métadonnées du produit
-            update_post_meta($product_id, '_pennylane_product_sync_error', $e->getMessage());
+            update_post_meta($product_id, '_pennylane_product_sync_error', $error_message_for_meta);
             update_post_meta($product_id, '_pennylane_product_last_sync', current_time('mysql'));
             
             if ($woo_pennylane_sync_history) {
@@ -121,16 +131,16 @@ class WooPennylane_Product_Sync {
             throw new Exception(__('Nom du produit manquant', 'woo-pennylane'));
         }
         
-        if (empty($data['external_reference'])) {
-            throw new Exception(__('Référence externe manquante', 'woo-pennylane'));
+        if (!isset($data['price_before_tax']) || !is_numeric($data['price_before_tax'])) {
+            throw new Exception(__('Prix HT manquant ou invalide', 'woo-pennylane'));
         }
         
-        if (!isset($data['price_before_tax'])) {
-            throw new Exception(__('Prix HT manquant', 'woo-pennylane'));
+        if (empty($data['vat_rate']) || !preg_match('/^[A-Z]{2}_\d+$/', $data['vat_rate'])) {
+            throw new Exception(__('Taux de TVA manquant ou invalide (format attendu: FR_XXX)', 'woo-pennylane'));
         }
-        
-        if (empty($data['vat_rate'])) {
-            throw new Exception(__('Taux de TVA manquant', 'woo-pennylane'));
+
+        if (empty($data['product_type']) || !in_array($data['product_type'], ['GOODS', 'SERVICE'])) {
+            throw new Exception(sprintf(__('Type de produit invalide: %s. Doit être GOODS ou SERVICE.', 'woo-pennylane'), $data['product_type']));
         }
     }
 
@@ -162,15 +172,14 @@ class WooPennylane_Product_Sync {
             'vat_rate' => $vat_rate_formatted,
             'unit' => 'piece', // Par défaut, à adapter selon vos besoins
             'currency' => get_woocommerce_currency(),
-            'reference' => $product->get_sku() ? $product->get_sku() : 'WC-' . $product->get_id()
+            'reference' => $product->get_sku() ? $product->get_sku() : 'WC-' . $product->get_id(),
+            'product_type' => $this->get_product_type($product) // Ajout du type de produit (GOODS ou SERVICE)
         );
         
         // Ajout du compte comptable si configuré
         $ledger_account_id = get_option('woo_pennylane_product_ledger_account', '');
         if (!empty($ledger_account_id)) {
-            $product_data['ledger_account'] = array(
-                'id' => $ledger_account_id
-            );
+            $product_data['ledger_account_id'] = $ledger_account_id; // Corrigé pour API V2
         }
         
         return apply_filters('woo_pennylane_product_data', $product_data, $product);
@@ -245,90 +254,6 @@ class WooPennylane_Product_Sync {
         }
         
         return 0;
-    }
-
-    /**
-     * Envoie une requête à l'API Pennylane
-     * 
-     * @param string $endpoint Point de terminaison de l'API
-     * @param array $data Données à envoyer
-     * @param string $method Méthode HTTP (POST par défaut)
-     * @return array Réponse de l'API
-     * @throws Exception En cas d'erreur
-     */
-    private function send_to_api($endpoint, $data = null, $method = 'POST') {
-        if (empty($this->api_key)) {
-            throw new Exception(__('Clé API non configurée', 'woo-pennylane'));
-        }
-
-        $url = $this->api_url . $endpoint;
-        
-        $headers = array(
-            'accept: application/json',
-            'authorization: Bearer ' . $this->api_key,
-            'content-type: application/json'
-        );
-
-        $curl = curl_init();
-
-        $curl_options = array(
-            CURLOPT_URL => $url,
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_ENCODING => '',
-            CURLOPT_MAXREDIRS => 10,
-            CURLOPT_TIMEOUT => 30,
-            CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-            CURLOPT_HTTPHEADER => $headers
-        );
-
-        if ($data !== null) {
-            $curl_options[CURLOPT_CUSTOMREQUEST] = $method;
-            $curl_options[CURLOPT_POSTFIELDS] = json_encode($data);
-        }
-
-        curl_setopt_array($curl, $curl_options);
-
-        $response = curl_exec($curl);
-        $err = curl_error($curl);
-        $http_code = curl_getinfo($curl, CURLINFO_HTTP_CODE);
-
-        curl_close($curl);
-
-        // Log en mode debug
-        if (get_option('woo_pennylane_debug_mode') === 'yes') {
-            error_log('Pennylane API Request: ' . $url);
-            error_log('Pennylane API Request Method: ' . $method);
-            error_log('Pennylane API Request Data: ' . json_encode($data));
-            error_log('Pennylane API Response Code: ' . $http_code);
-            error_log('Pennylane API Response: ' . $response);
-            if ($err) {
-                error_log('Pennylane API Error: ' . $err);
-            }
-        }
-
-        if ($err) {
-            throw new Exception('Erreur cURL: ' . $err);
-        }
-
-        $response_data = json_decode($response, true);
-
-        if ($http_code >= 400) {
-            $error_message = 'Erreur API (HTTP ' . $http_code . ')';
-            
-            if (isset($response_data['message'])) {
-                $error_message .= ': ' . $response_data['message'];
-            } elseif (isset($response_data['error'])) {
-                $error_message .= ': ' . $response_data['error'];
-            } elseif (isset($response_data['detail'])) {
-                $error_message .= ': ' . $response_data['detail'];
-            } else {
-                $error_message .= ': ' . $response;
-            }
-            
-            throw new Exception($error_message);
-        }
-
-        return $response_data;
     }
 
     /**

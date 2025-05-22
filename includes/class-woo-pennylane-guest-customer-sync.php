@@ -7,11 +7,13 @@ if (!defined('ABSPATH')) {
  * Classe de synchronisation des clients invités (sans compte WooCommerce)
  */
 class WooPennylane_Guest_Customer_Sync {
-    private $api_key;
-    private $api_url = 'https://app.pennylane.com/api/external/v2';
+    /**
+     * @var \WooPennylane\Api\Client
+     */
+    private $api_client;
 
     public function __construct() {
-        $this->api_key = get_option('woo_pennylane_api_key');
+        $this->api_client = new \WooPennylane\Api\Client();
     }
 
     /**
@@ -138,6 +140,9 @@ class WooPennylane_Guest_Customer_Sync {
             // Prépare les données du client à partir de la commande
             $customer_data = $this->prepare_customer_data_from_order($order);
             
+            // Valider les données du client invité
+            $this->validate_guest_customer_data($customer_data, $email);
+
             // Vérifie d'abord si le client existe déjà dans Pennylane
             $existing_customer = $this->check_existing_customer($email);
             
@@ -146,7 +151,7 @@ class WooPennylane_Guest_Customer_Sync {
                 $pennylane_id = $existing_customer;
             } else {
                 // Crée un nouveau client dans Pennylane
-                $response = $this->send_to_api('/individual_customers', $customer_data);
+                $response = $this->api_client->create_individual_customer($customer_data);
                 $pennylane_id = $response['id'];
             }
             
@@ -162,12 +167,26 @@ class WooPennylane_Guest_Customer_Sync {
                 array('%s', '%s', '%d', '%s')
             );
             
+            \WooPennylane\Logger::info(
+                sprintf('Client invité (Email: %s) synchronisé avec succès. ID Pennylane: %s', esc_html($email), $pennylane_id),
+                null, // Pas d'ID utilisateur direct pour l'invité, l'email est la clé
+                'guest_customer'
+            );
+
             return true;
             
         } catch (Exception $e) {
-            // Log l'erreur
-            if (get_option('woo_pennylane_debug_mode') === 'yes') {
-                error_log('Pennylane Guest Customer Sync Error (Email: ' . $email . '): ' . $e->getMessage());
+            $error_message_for_meta = $e->getMessage();
+            $log_message_error = sprintf(
+                'Erreur API Pennylane lors de la synchronisation du client invité (Email: %s): %s',
+                esc_html($email),
+                $e->getMessage()
+            );
+
+            \WooPennylane\Logger::error($log_message_error, null, 'guest_customer');
+
+            if (isset($customer_data)) {
+                \WooPennylane\Logger::debug("Données préparées pour client invité (Email: " . esc_html($email) . "): " . wp_json_encode($customer_data), null, 'guest_customer');
             }
             
             // Enregistre l'erreur dans la table
@@ -186,6 +205,58 @@ class WooPennylane_Guest_Customer_Sync {
     }
     
     /**
+     * Valide les données du client invité avant l'envoi à Pennylane
+     *
+     * @param array $data Données du client
+     * @param string $email Email utilisé pour la validation (si $data['emails'] est vide)
+     * @throws Exception Si des données obligatoires sont manquantes ou incorrectes
+     */
+    private function validate_guest_customer_data($data, $email_context) {
+        if (empty($data['first_name'])) {
+            throw new Exception(sprintf(__('Prénom manquant pour le client invité (Email: %s)', 'woo-pennylane'), esc_html($email_context)));
+        }
+        
+        if (empty($data['last_name'])) {
+            throw new Exception(sprintf(__('Nom manquant pour le client invité (Email: %s)', 'woo-pennylane'), esc_html($email_context)));
+        }
+        
+        if (empty($data['billing_address']) || 
+            empty($data['billing_address']['address']) || 
+            empty($data['billing_address']['postal_code']) || 
+            empty($data['billing_address']['city']) || 
+            empty($data['billing_address']['country_alpha2'])) {
+            throw new Exception(sprintf(__('Adresse de facturation incomplète pour le client invité (Email: %s)', 'woo-pennylane'), esc_html($email_context)));
+        }
+
+        if (!preg_match('/^[A-Z]{2}$/', $data['billing_address']['country_alpha2'])) {
+            throw new Exception(sprintf(__('Format de code pays invalide pour l'adresse de facturation du client invité (Email: %s, Pays: %s). Doit être 2 lettres majuscules (ex: FR).', 'woo-pennylane'), esc_html($email_context), esc_html($data['billing_address']['country_alpha2'])));
+        }
+        
+        if (empty($data['emails']) || !is_array($data['emails']) || empty($data['emails'][0])) {
+             throw new Exception(sprintf(__('Email manquant ou invalide dans les données préparées pour le client invité (Email contexte: %s)', 'woo-pennylane'), esc_html($email_context)));
+        }
+
+        foreach ($data['emails'] as $email_item) {
+            if (!filter_var($email_item, FILTER_VALIDATE_EMAIL)) {
+                throw new Exception(sprintf(__('Format d\'email invalide pour le client invité (Email: %s, Contexte: %s)', 'woo-pennylane'), esc_html($email_item), esc_html($email_context)));
+            }
+        }
+
+        // Validation de l'adresse de livraison si présente
+        if (!empty($data['delivery_address'])) {
+            if (empty($data['delivery_address']['address']) || 
+                empty($data['delivery_address']['postal_code']) || 
+                empty($data['delivery_address']['city']) || 
+                empty($data['delivery_address']['country_alpha2'])) {
+                throw new Exception(sprintf(__('Adresse de livraison incomplète pour le client invité (Email: %s)', 'woo-pennylane'), esc_html($email_context)));
+            }
+            if (!preg_match('/^[A-Z]{2}$/', $data['delivery_address']['country_alpha2'])) {
+                throw new Exception(sprintf(__('Format de code pays invalide pour l'adresse de livraison du client invité (Email: %s, Pays: %s). Doit être 2 lettres majuscules (ex: FR).', 'woo-pennylane'), esc_html($email_context), esc_html($data['delivery_address']['country_alpha2'])));
+            }
+        }
+    }
+
+    /**
      * Vérifie si un client existe déjà dans Pennylane en utilisant son email
      * 
      * @param string $email Email du client
@@ -194,7 +265,7 @@ class WooPennylane_Guest_Customer_Sync {
     private function check_existing_customer($email) {
         try {
             // Appel à l'API pour rechercher un client par email
-            $response = $this->send_to_api('/individual_customers?email=' . urlencode($email), null, 'GET');
+            $response = $this->api_client->find_individual_customer_by_email($email);
             
             if (!empty($response) && is_array($response)) {
                 // Retourne l'ID du premier client trouvé
@@ -207,6 +278,7 @@ class WooPennylane_Guest_Customer_Sync {
             
             return false;
         } catch (Exception $e) {
+            \WooPennylane\Logger::error('Erreur API Pennylane (Find Guest Customer by email ' . esc_html($email) . '): ' . $e->getMessage(), null, 'guest_customer');
             return false;
         }
     }
@@ -260,88 +332,5 @@ class WooPennylane_Guest_Customer_Sync {
         }
 
         return $customer_data;
-    }
-    
-    /**
-     * Envoie une requête à l'API Pennylane
-     * 
-     * @param string $endpoint Point de terminaison de l'API
-     * @param array $data Données à envoyer (null pour GET)
-     * @param string $method Méthode HTTP (POST par défaut)
-     * @return array Réponse de l'API
-     * @throws Exception En cas d'erreur
-     */
-    private function send_to_api($endpoint, $data = null, $method = 'POST') {
-        if (empty($this->api_key)) {
-            throw new Exception(__('Clé API non configurée', 'woo-pennylane'));
-        }
-
-        $url = $this->api_url . $endpoint;
-        
-        $headers = array(
-            'accept: application/json',
-            'authorization: Bearer ' . $this->api_key,
-            'content-type: application/json'
-        );
-
-        $curl = curl_init();
-
-        $curl_options = array(
-            CURLOPT_URL => $url,
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_ENCODING => '',
-            CURLOPT_MAXREDIRS => 10,
-            CURLOPT_TIMEOUT => 30,
-            CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-            CURLOPT_HTTPHEADER => $headers,
-            CURLOPT_CUSTOMREQUEST => $method
-        );
-
-        if ($data !== null && $method !== 'GET') {
-            $curl_options[CURLOPT_POSTFIELDS] = json_encode($data);
-        }
-
-        curl_setopt_array($curl, $curl_options);
-
-        $response = curl_exec($curl);
-        $err = curl_error($curl);
-        $http_code = curl_getinfo($curl, CURLINFO_HTTP_CODE);
-
-        curl_close($curl);
-
-        // Log détaillé
-        if (get_option('woo_pennylane_debug_mode') === 'yes') {
-            error_log('Pennylane API URL: ' . $url);
-            if ($data !== null) {
-                error_log('Pennylane API Request Data: ' . json_encode($data));
-            }
-            error_log('Pennylane API Response Code: ' . $http_code);
-            error_log('Pennylane API Response: ' . $response);
-            error_log('Pennylane API Error: ' . ($err ? $err : 'None'));
-        }
-
-        if ($err) {
-            throw new Exception('Erreur cURL: ' . $err);
-        }
-
-        $response_data = json_decode($response, true);
-
-        if ($http_code >= 400) {
-            $error_message = 'Erreur API (HTTP ' . $http_code . ')';
-            
-            if (isset($response_data['message'])) {
-                $error_message .= ': ' . $response_data['message'];
-            } elseif (isset($response_data['error'])) {
-                $error_message .= ': ' . $response_data['error'];
-            } elseif (isset($response_data['detail'])) {
-                $error_message .= ': ' . $response_data['detail'];
-            } else {
-                $error_message .= ': ' . $response;
-            }
-            
-            throw new Exception($error_message);
-        }
-
-        return $response_data;
     }
 }

@@ -180,4 +180,23 @@ class WooPennylane_Logger {
         
         return (int) $wpdb->get_var($sql);
     }
+
+    public static function info($message, $entity_id = null, $entity_type = null) {
+        return self::add_log($entity_id, $entity_type, 'INFO', $message);
+    }
+
+    public static function error($message, $entity_id = null, $entity_type = null) {
+        return self::add_log($entity_id, $entity_type, 'ERROR', $message);
+    }
+
+    public static function warning($message, $entity_id = null, $entity_type = null) {
+        return self::add_log($entity_id, $entity_type, 'WARNING', $message);
+    }
+
+    public static function debug($message, $entity_id = null, $entity_type = null) {
+        if (get_option('woo_pennylane_debug_mode') === 'yes') {
+            return self::add_log($entity_id, $entity_type, 'DEBUG', $message);
+        }
+        return false; // Ne logue rien si le mode debug n'est pas activé
+    }
 }

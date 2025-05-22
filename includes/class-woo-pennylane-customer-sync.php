@@ -4,11 +4,13 @@ if (!defined('ABSPATH')) {
 }
 
 class WooPennylane_Customer_Sync {
-    private $api_key;
-    private $api_url = 'https://app.pennylane.com/api/external/v2';
+    /**
+     * @var \WooPennylane\Api\Client
+     */
+    private $api_client;
 
     public function __construct() {
-        $this->api_key = get_option('woo_pennylane_api_key');
+        $this->api_client = new \WooPennylane\Api\Client();
     }
 
     /**
@@ -34,11 +36,11 @@ class WooPennylane_Customer_Sync {
             
             if ($existing_customer) {
                 // Mise à jour du client existant
-                $response = $this->send_to_api('/individual_customers/' . $existing_customer['id'], $customer_data, 'PUT');
+                $response = $this->api_client->update_individual_customer($existing_customer['id'], $customer_data);
                 $pennylane_id = $existing_customer['id'];
             } else {
                 // Création d'un nouveau client
-                $response = $this->send_to_api('/individual_customers', $customer_data);
+                $response = $this->api_client->create_individual_customer($customer_data);
                 $pennylane_id = isset($response['id']) ? $response['id'] : null;
             }
 
@@ -48,16 +50,30 @@ class WooPennylane_Customer_Sync {
             update_user_meta($customer_id, '_pennylane_last_sync', current_time('mysql'));
             delete_user_meta($customer_id, '_pennylane_sync_error');
 
+            \WooPennylane\Logger::info(
+                sprintf('Client WooCommerce ID #%d synchronisé avec succès. ID Pennylane: %s', $customer_id, $pennylane_id),
+                $customer_id,
+                'customer'
+            );
+
             return true;
 
         } catch (Exception $e) {
-            // Log l'erreur
-            if (get_option('woo_pennylane_debug_mode') === 'yes') {
-                error_log('Pennylane Customer Sync Error (ID #' . $customer_id . '): ' . $e->getMessage());
+            $error_message_for_meta = $e->getMessage();
+            $log_message_error = sprintf(
+                'Erreur API Pennylane lors de la synchronisation du client WooCommerce ID #%d: %s',
+                $customer_id,
+                $e->getMessage()
+            );
+            
+            \WooPennylane\Logger::error($log_message_error, $customer_id, 'customer');
+
+            if (isset($customer_data)) {
+                \WooPennylane\Logger::debug("Données préparées pour le client #{$customer_id}: " . wp_json_encode($customer_data), $customer_id, 'customer');
             }
             
             // Enregistre l'erreur dans les métadonnées
-            update_user_meta($customer_id, '_pennylane_sync_error', $e->getMessage());
+            update_user_meta($customer_id, '_pennylane_sync_error', $error_message_for_meta);
             update_user_meta($customer_id, '_pennylane_last_sync', current_time('mysql'));
             
             throw $e;
@@ -141,6 +157,10 @@ class WooPennylane_Customer_Sync {
             empty($data['billing_address']['country_alpha2'])) {
             throw new Exception(__('Adresse de facturation incomplète', 'woo-pennylane'));
         }
+
+        if (!preg_match('/^[A-Z]{2}$/', $data['billing_address']['country_alpha2'])) {
+            throw new Exception(sprintf(__('Format de code pays invalide pour l'adresse de facturation: %s. Doit être 2 lettres majuscules (ex: FR).', 'woo-pennylane'), $data['billing_address']['country_alpha2']));
+        }
         
         // Validation de l'adresse de livraison si présente
         if (!empty($data['delivery_address'])) {
@@ -149,6 +169,20 @@ class WooPennylane_Customer_Sync {
                 empty($data['delivery_address']['city']) || 
                 empty($data['delivery_address']['country_alpha2'])) {
                 throw new Exception(__('Adresse de livraison incomplète', 'woo-pennylane'));
+            }
+            if (!preg_match('/^[A-Z]{2}$/', $data['delivery_address']['country_alpha2'])) {
+                throw new Exception(sprintf(__('Format de code pays invalide pour l'adresse de livraison: %s. Doit être 2 lettres majuscules (ex: FR).', 'woo-pennylane'), $data['delivery_address']['country_alpha2']));
+            }
+        }
+
+        if (!empty($data['emails'])) {
+            if (!is_array($data['emails'])) {
+                throw new Exception(__('Le champ emails doit être un tableau.', 'woo-pennylane'));
+            }
+            foreach ($data['emails'] as $email) {
+                if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                    throw new Exception(sprintf(__('Format d\'email invalide: %s', 'woo-pennylane'), $email));
+                }
             }
         }
     }
@@ -161,7 +195,7 @@ class WooPennylane_Customer_Sync {
      */
     public function find_customer_by_external_reference($external_reference) {
         try {
-            $response = $this->send_to_api('/individual_customers?external_reference=' . urlencode($external_reference), null, 'GET');
+            $response = $this->api_client->find_individual_customer_by_external_reference($external_reference);
             
             if (!empty($response) && isset($response[0]['id'])) {
                 return $response[0];
@@ -169,9 +203,7 @@ class WooPennylane_Customer_Sync {
             
             return null;
         } catch (Exception $e) {
-            if (get_option('woo_pennylane_debug_mode') === 'yes') {
-                error_log('Pennylane API Error (Find Customer): ' . $e->getMessage());
-            }
+            \WooPennylane\Logger::error('Erreur API Pennylane (Find Customer by external_reference ' . $external_reference . '): ' . $e->getMessage(), null, 'customer');
             return null;
         }
     }
@@ -180,84 +212,6 @@ class WooPennylane_Customer_Sync {
      * Récupère un client Pennylane par son ID
      */
     public function get_customer($pennylane_id) {
-        return $this->send_to_api('/individual_customers/' . $pennylane_id, null, 'GET');
-    }
-
-    /**
-     * Envoie une requête à l'API Pennylane
-     */
-    private function send_to_api($endpoint, $data = null, $method = 'POST') {
-        if (empty($this->api_key)) {
-            throw new Exception(__('Clé API non configurée', 'woo-pennylane'));
-        }
-
-        $url = $this->api_url . $endpoint;
-        
-        $headers = array(
-            'accept: application/json',
-            'authorization: Bearer ' . $this->api_key,
-            'content-type: application/json'
-        );
-
-        $curl = curl_init();
-
-        $curl_options = array(
-            CURLOPT_URL => $url,
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_ENCODING => '',
-            CURLOPT_MAXREDIRS => 10,
-            CURLOPT_TIMEOUT => 30,
-            CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-            CURLOPT_HTTPHEADER => $headers,
-            CURLOPT_CUSTOMREQUEST => $method
-        );
-
-        if ($data !== null && ($method === 'POST' || $method === 'PUT')) {
-            $curl_options[CURLOPT_POSTFIELDS] = json_encode($data);
-        }
-
-        curl_setopt_array($curl, $curl_options);
-
-        $response = curl_exec($curl);
-        $err = curl_error($curl);
-        $http_code = curl_getinfo($curl, CURLINFO_HTTP_CODE);
-
-        curl_close($curl);
-
-        // Log détaillé
-        if (get_option('woo_pennylane_debug_mode') === 'yes') {
-            error_log('Pennylane API URL: ' . $url);
-            error_log('Pennylane API Method: ' . $method);
-            if ($data !== null) {
-                error_log('Pennylane API Request Data: ' . json_encode($data));
-            }
-            error_log('Pennylane API Response Code: ' . $http_code);
-            error_log('Pennylane API Response: ' . $response);
-            error_log('Pennylane API Error: ' . ($err ? $err : 'None'));
-        }
-
-        if ($err) {
-            throw new Exception('Erreur cURL: ' . $err);
-        }
-
-        $response_data = json_decode($response, true);
-
-        if ($http_code >= 400) {
-            $error_message = 'Erreur API (HTTP ' . $http_code . ')';
-            
-            if (isset($response_data['message'])) {
-                $error_message .= ': ' . $response_data['message'];
-            } elseif (isset($response_data['error'])) {
-                $error_message .= ': ' . $response_data['error'];
-            } elseif (isset($response_data['detail'])) {
-                $error_message .= ': ' . $response_data['detail'];
-            } else {
-                $error_message .= ': ' . $response;
-            }
-            
-            throw new Exception($error_message);
-        }
-
-        return $response_data;
+        return $this->api_client->get_individual_customer($pennylane_id);
     }
 }
